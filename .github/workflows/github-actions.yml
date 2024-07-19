@@ -80,7 +80,9 @@ jobs:
             docker stop your-container || true
             docker rm your-container || true
             docker run -d --name your-container -p 80:80 abdulrhmanashraf98/marom-medical:${{ github.sha }}
+          debug: true
         continue-on-error: true
+
 
       - name: Notify Discord of deployment failure
         if: failure() && steps.deploy.outcome == 'failure'
