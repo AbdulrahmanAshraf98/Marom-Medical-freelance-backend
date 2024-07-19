@@ -1,0 +1,70 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+      - dev
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: |
+            abdulrhmanashraf98/marom-medical:${{ github.sha }}
+            abdulrhmanashraf98/marom-medical:latest
+          build-args: |
+            APP_PORT=${{ secrets.APP_PORT }}
+            DB_HOST=${{ secrets.DB_HOST }}
+            DB_PORT=${{ secrets.DB_PORT }}
+            DB_USERNAME=${{ secrets.DB_USERNAME }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            DB_DATABASE=${{ secrets.DB_DATABASE }}
+            DB_TYPE=${{ secrets.DB_TYPE }}
+
+      - name: Run tests
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/app -w /app abdulrhmanashraf98/marom-medical:${{ github.sha }} npm test
+
+      - name: Notify Discord of build start
+        run: |
+          curl -H "Content-Type: application/json" -X POST -d '{"content": "Build process started for commit '${{ github.sha }}'"}' ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v0.1.1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            docker pull abdulrhmanashraf98/marom-medical:${{ github.sha }}
+            docker pull abdulrhmanashraf98/marom-medical:latest
+            docker stop your-container || true
+            docker rm your-container || true
+            docker run -d --name your-container -p 80:80 abdulrhmanashraf98/marom-medical:${{ github.sha }}
+
+      - name: Notify Discord of build completion
+        run: |
+          curl -H "Content-Type: application/json" -X POST -d '{"content": "Build process completed for commit '${{ github.sha }}'"}' ${{ secrets.DISCORD_WEBHOOK_URL }}
