@@ -103,21 +103,10 @@ jobs:
 
       - name: Build Docker image
         id: build
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          push: true
-          tags: |
-            abdulrhmanashraf98/marom-medical:${{ github.sha }}
-            abdulrhmanashraf98/marom-medical:latest
-          build-args: |
-            APP_PORT=${{ secrets.APP_PORT }}
-            DB_HOST=${{ secrets.DB_HOST }}
-            DB_PORT=${{ secrets.DB_PORT }}
-            DB_USERNAME=${{ secrets.DB_USERNAME }}
-            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-            DB_DATABASE=${{ secrets.DB_DATABASE }}
-            DB_TYPE=${{ secrets.DB_TYPE }}
+        run: |
+          echo "Building Docker image..."
+          docker build --file Dockerfile --tag abdulrhmanashraf98/marom-medical:${{ github.sha }} .
+          docker tag abdulrhmanashraf98/marom-medical:${{ github.sha }} abdulrhmanashraf98/marom-medical:latest
 
       - name: Notify Discord of build result
         if: always()
