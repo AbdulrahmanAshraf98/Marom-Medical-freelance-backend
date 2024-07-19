@@ -79,11 +79,11 @@ jobs:
         run: |
           INSTANCE_ID="${{secrets.INSTANCE_ID}}"  # Replace with your EC2 instance ID
           aws ssm send-command \
-            --document-name "AWS-RunShellScript" \
-            --targets "Key=instanceids,Values=$INSTANCE_ID" \
-            --parameters 'commands=["docker pull abdulrhmanashraf98/marom-medical:${{ github.sha }}", "docker pull abdulrhmanashraf98/marom-medical:latest", "docker stop your-container || true", "docker rm your-container || true", "docker run -d --name your-container -p 80:80 abdulrhmanashraf98/marom-medical:${{ github.sha }}"]' \
-            --timeout-seconds 600 \
-            --region eu-north-1
+          --document-name "AWS-RunShellScript" \
+          --targets "Key=instanceids,Values=$INSTANCE_ID" \
+          --parameters 'commands=["docker pull abdulrhmanashraf98/marom-medical:${{ github.sha }}", "docker pull abdulrhmanashraf98/marom-medical:latest", "docker stop your-container || true", "docker rm your-container || true", "docker run -d --name your-container -p 8080:80 abdulrhmanashraf98/marom-medical:${{ github.sha }}"]' \
+          --timeout-seconds 600 \
+          --region eu-north-1
 
       - name: Notify Discord of deployment failure
         if: failure()
