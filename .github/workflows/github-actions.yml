@@ -1,0 +1,63 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+      - dev
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-docker-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-docker-
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: |
+            abdulrhmanashraf98/marom-medical:${{ github.sha }}
+            abdulrhmanashraf98/marom-medical:latest
+          cache-from: type=registry,ref=abdulrhmanashraf98/marom-medical:latest
+          cache-to: type=registry,ref=abdulrhmanashraf98/marom-medical:latest,mode=max
+
+      - name: Run tests
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/app -w /app abdulrhmanashraf98/marom-medical:${{ github.sha }} pytest
+
+      - name: Notify Discord of build start
+        run: |
+          curl -H "Content-Type: application/json" -X POST -d '{"content": "Build process started for commit '${{ github.sha }}'"}' ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+      - name: Deploy to EC2
+        run: |
+          ssh -o StrictHostKeyChecking=no ec2-user@${{ secrets.EC2_HOST }} << 'EOF'
+            docker pull abdulrhmanashraf98/marom-medical:${{ github.sha }}
+            docker pull abdulrhmanashraf98/marom-medical:latest
+            docker stop your-container || true
+            docker rm your-container || true
+            docker run -d --name your-container -p 80:80 abdulrhmanashraf98/marom-medical:${{ github.sha }}
+          EOF
+
+      - name: Notify Discord of build completion
+        run: |
+          curl -H "Content-Type: application/json" -X POST -d '{"content": "Build process completed for commit '${{ github.sha }}'"}' ${{ secrets.DISCORD_WEBHOOK_URL }}
