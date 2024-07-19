@@ -11,7 +11,7 @@ on:
       - dev
 
 jobs:
-  test:
+  build:
     runs-on: ubuntu-latest
 
     steps:
@@ -50,11 +50,6 @@ jobs:
                     "name": "Commit SHA",
                     "value": "${{ github.sha }}",
                     "inline": true
-                  },
-                  {
-                    "name": "Error Details",
-                    "value": "Check the [logs here](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for more information.",
-                    "inline": true
                   }
                 ],
                 "footer": {
@@ -62,13 +57,9 @@ jobs:
                 }
               }]
             }' ${{ secrets.DISCORD_WEBHOOK_URL }}
+            exit 1
           fi
 
-  build:
-    runs-on: ubuntu-latest
-    needs: test
-
-    steps:
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
@@ -103,10 +94,21 @@ jobs:
 
       - name: Build Docker image
         id: build
-        run: |
-          echo "Building Docker image..."
-          docker build --file Dockerfile --tag abdulrhmanashraf98/marom-medical:${{ github.sha }} .
-          docker tag abdulrhmanashraf98/marom-medical:${{ github.sha }} abdulrhmanashraf98/marom-medical:latest
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: |
+            abdulrhmanashraf98/marom-medical:${{ github.sha }}
+            abdulrhmanashraf98/marom-medical:latest
+          build-args: |
+            APP_PORT=${{ secrets.APP_PORT }}
+            DB_HOST=${{ secrets.DB_HOST }}
+            DB_PORT=${{ secrets.DB_PORT }}
+            DB_USERNAME=${{ secrets.DB_USERNAME }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            DB_DATABASE=${{ secrets.DB_DATABASE }}
+            DB_TYPE=${{ secrets.DB_TYPE }}
 
       - name: Notify Discord of build result
         if: always()
@@ -146,11 +148,6 @@ jobs:
                     "name": "Commit SHA",
                     "value": "${{ github.sha }}",
                     "inline": true
-                  },
-                  {
-                    "name": "Error Details",
-                    "value": "Check the [logs here](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for more information.",
-                    "inline": true
                   }
                 ],
                 "footer": {
@@ -158,13 +155,9 @@ jobs:
                 }
               }]
             }' ${{ secrets.DISCORD_WEBHOOK_URL }}
+            exit 1
           fi
 
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-
-    steps:
       - name: Set up AWS CLI
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -254,11 +247,6 @@ jobs:
                     "name": "Commit SHA",
                     "value": "${{ github.sha }}",
                     "inline": true
-                  },
-                  {
-                    "name": "Error Details",
-                    "value": "Check the [logs here](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for more information.",
-                    "inline": true
                   }
                 ],
                 "footer": {
@@ -266,4 +254,5 @@ jobs:
                 }
               }]
             }' ${{ secrets.DISCORD_WEBHOOK_URL }}
+            exit 1
           fi
