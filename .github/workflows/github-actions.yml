@@ -21,14 +21,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      - name: Cache Docker layers
-        uses: actions/cache@v3
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-docker-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-docker-
-
       - name: Build Docker image
         uses: docker/build-push-action@v4
         with:
@@ -37,8 +29,14 @@ jobs:
           tags: |
             abdulrhmanashraf98/marom-medical:${{ github.sha }}
             abdulrhmanashraf98/marom-medical:latest
-          cache-from: type=registry,ref=abdulrhmanashraf98/marom-medical:latest
-          cache-to: type=registry,ref=abdulrhmanashraf98/marom-medical:latest,mode=max
+          build-args: |
+            APP_PORT=${{ secrets.APP_PORT }}
+            DB_HOST=${{ secrets.DB_HOST }}
+            DB_PORT=${{ secrets.DB_PORT }}
+            DB_USERNAME=${{ secrets.DB_USERNAME }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            DB_DATABASE=${{ secrets.DB_DATABASE }}
+            DB_TYPE=${{ secrets.DB_TYPE }}
 
       - name: Run tests
         run: |
