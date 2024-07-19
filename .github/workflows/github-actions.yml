@@ -40,7 +40,7 @@ jobs:
 
       - name: Run tests
         run: |
-          docker run --rm -v ${{ github.workspace }}:/app -w /app abdulrhmanashraf98/marom-medical:${{ github.sha }} pytest
+          docker run --rm -v ${{ github.workspace }}:/app -w /app abdulrhmanashraf98/marom-medical:${{ github.sha }} npm test
 
       - name: Notify Discord of build start
         run: |

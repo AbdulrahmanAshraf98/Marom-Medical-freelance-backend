@@ -22,13 +22,26 @@ WORKDIR /app
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY package*.json ./
-COPY .env ./
+
+# Set environment variables (use default values if needed)
+ARG APP_PORT=8000
+ARG DB_HOST
+ARG DB_PORT
+ARG DB_USERNAME
+ARG DB_PASSWORD
+ARG DB_DATABASE
+ARG DB_TYPE
+
+ENV APP_PORT=${APP_PORT}
+ENV DB_HOST=${DB_HOST}
+ENV DB_PORT=${DB_PORT}
+ENV DB_USERNAME=${DB_USERNAME}
+ENV DB_PASSWORD=${DB_PASSWORD}
+ENV DB_DATABASE=${DB_DATABASE}
+ENV DB_TYPE=${DB_TYPE}
 
 # Expose the application port
-ARG APP_PORT=8000
-ENV APP_PORT=${APP_PORT}
 EXPOSE ${APP_PORT}
 
 # Start the application
 CMD ["node", "dist/main.js"]
-
