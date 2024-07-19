@@ -11,7 +11,7 @@ on:
       - dev
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
 
     steps:
@@ -50,6 +50,11 @@ jobs:
                     "name": "Commit SHA",
                     "value": "${{ github.sha }}",
                     "inline": true
+                  },
+                  {
+                    "name": "Error Details",
+                    "value": "Check the [logs here](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for more information.",
+                    "inline": true
                   }
                 ],
                 "footer": {
@@ -57,9 +62,13 @@ jobs:
                 }
               }]
             }' ${{ secrets.DISCORD_WEBHOOK_URL }}
-            exit 1
           fi
 
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
@@ -148,6 +157,11 @@ jobs:
                     "name": "Commit SHA",
                     "value": "${{ github.sha }}",
                     "inline": true
+                  },
+                  {
+                    "name": "Error Details",
+                    "value": "Check the [logs here](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for more information.",
+                    "inline": true
                   }
                 ],
                 "footer": {
@@ -155,9 +169,13 @@ jobs:
                 }
               }]
             }' ${{ secrets.DISCORD_WEBHOOK_URL }}
-            exit 1
           fi
 
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
       - name: Set up AWS CLI
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -247,6 +265,11 @@ jobs:
                     "name": "Commit SHA",
                     "value": "${{ github.sha }}",
                     "inline": true
+                  },
+                  {
+                    "name": "Error Details",
+                    "value": "Check the [logs here](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for more information.",
+                    "inline": true
                   }
                 ],
                 "footer": {
@@ -254,5 +277,4 @@ jobs:
                 }
               }]
             }' ${{ secrets.DISCORD_WEBHOOK_URL }}
-            exit 1
           fi
