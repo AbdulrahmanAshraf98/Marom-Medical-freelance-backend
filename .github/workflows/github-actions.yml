@@ -53,14 +53,17 @@ jobs:
           curl -H "Content-Type: application/json" -X POST -d '{"content": "Build process started for commit '${{ github.sha }}'"}' ${{ secrets.DISCORD_WEBHOOK_URL }}
 
       - name: Deploy to EC2
-        run: |
-          ssh -o StrictHostKeyChecking=no ec2-user@${{ secrets.EC2_HOST }} << 'EOF'
+        uses: appleboy/ssh-action@v0.1.1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
             docker pull abdulrhmanashraf98/marom-medical:${{ github.sha }}
             docker pull abdulrhmanashraf98/marom-medical:latest
             docker stop your-container || true
             docker rm your-container || true
             docker run -d --name your-container -p 80:80 abdulrhmanashraf98/marom-medical:${{ github.sha }}
-          EOF
 
       - name: Notify Discord of build completion
         run: |
