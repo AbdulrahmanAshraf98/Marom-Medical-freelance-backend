@@ -67,7 +67,6 @@ jobs:
             DB_DATABASE=${{ secrets.DB_DATABASE }}
             DB_TYPE=${{ secrets.DB_TYPE }}
 
-
       - name: Deploy to EC2
         if: success()
         uses: appleboy/ssh-action@v0.1.1
