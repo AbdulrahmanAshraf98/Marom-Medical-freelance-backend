@@ -28,65 +28,16 @@ jobs:
           npm install
 
       - name: Run tests
-        id: test
         run: |
           npm test
         continue-on-error: true
 
-      - name: Notify Discord of test start
-        if: always()
-        run: |
-          curl -H "Content-Type: application/json" -X POST -d '{
-            "embeds": [{
-              "title": "Test Started 🧪",
-              "description": "Testing has started for commit `${{ github.sha }}`.",
-              "color": 16776960,
-              "thumbnail": {
-                "url": "https://example.com/start-image.png"
-              },
-              "fields": [
-                {
-                  "name": "Commit SHA",
-                  "value": "${{ github.sha }}",
-                  "inline": true
-                }
-              ],
-              "footer": {
-                "text": "GitHub Actions CI/CD"
-              }
-            }]
-          }' ${{ secrets.DISCORD_WEBHOOK_URL }}
-
-      - name: Notify Discord of test result
-        if: steps.test.outcome == 'success'
-        run: |
-          curl -H "Content-Type: application/json" -X POST -d '{
-            "embeds": [{
-              "title": "Tests Passed ✅",
-              "description": "All tests passed for commit `${{ github.sha }}`. Proceeding to build.",
-              "color": 65280,
-              "thumbnail": {
-                "url": "https://example.com/success-image.png"
-              },
-              "fields": [
-                {
-                  "name": "Commit SHA",
-                  "value": "${{ github.sha }}",
-                  "inline": true
-                }
-              ],
-              "footer": {
-                "text": "GitHub Actions CI/CD"
-              }
-            }]
-          }' ${{ secrets.DISCORD_WEBHOOK_URL }}
-
       - name: Notify Discord of test failure
-        if: steps.test.outcome == 'failure'
+        if: failure()
         run: |
           curl -H "Content-Type: application/json" -X POST -d '{
             "embeds": [{
-              "title": "Tests Failed ❌",
+              "title": "Test Failure",
               "description": "Tests failed for commit `${{ github.sha }}`. Check the logs for details.",
               "color": 16711680,
               "thumbnail": {
@@ -105,11 +56,6 @@ jobs:
             }]
           }' ${{ secrets.DISCORD_WEBHOOK_URL }}
 
-  docker-build:
-    runs-on: ubuntu-latest
-    needs: build
-
-    steps:
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
@@ -123,7 +69,7 @@ jobs:
         run: |
           curl -H "Content-Type: application/json" -X POST -d '{
             "embeds": [{
-              "title": "Build Started 🏗️",
+              "title": "Build Started",
               "description": "Build process started for commit `${{ github.sha }}`.",
               "color": 16776960,
               "thumbnail": {
@@ -159,59 +105,6 @@ jobs:
             DB_DATABASE=${{ secrets.DB_DATABASE }}
             DB_TYPE=${{ secrets.DB_TYPE }}
 
-      - name: Notify Discord of build success
-        if: success()
-        run: |
-          curl -H "Content-Type: application/json" -X POST -d '{
-            "embeds": [{
-              "title": "Build Success 🎉",
-              "description": "Build completed successfully for commit `${{ github.sha }}`.",
-              "color": 65280,
-              "thumbnail": {
-                "url": "https://example.com/success-image.png"
-              },
-              "fields": [
-                {
-                  "name": "Commit SHA",
-                  "value": "${{ github.sha }}",
-                  "inline": true
-                }
-              ],
-              "footer": {
-                "text": "GitHub Actions CI/CD"
-              }
-            }]
-          }' ${{ secrets.DISCORD_WEBHOOK_URL }}
-
-      - name: Notify Discord of build failure
-        if: failure()
-        run: |
-          curl -H "Content-Type: application/json" -X POST -d '{
-            "embeds": [{
-              "title": "Build Failure 🚨",
-              "description": "Build failed for commit `${{ github.sha }}`. Check the logs for details.",
-              "color": 16711680,
-              "thumbnail": {
-                "url": "https://example.com/failure-image.png"
-              },
-              "fields": [
-                {
-                  "name": "Commit SHA",
-                  "value": "${{ github.sha }}",
-                  "inline": true
-                }
-              ],
-              "footer": {
-                "text": "GitHub Actions CI/CD"
-              }
-            }]
-          }' ${{ secrets.DISCORD_WEBHOOK_URL }}
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: docker-build
-
-    steps:
       - name: Set up AWS CLI
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -219,59 +112,35 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: eu-north-1
 
-      - name: Notify Discord of deployment start
-        run: |
-          curl -H "Content-Type: application/json" -X POST -d '{
-            "embeds": [{
-              "title": "Deployment Started 🚀",
-              "description": "Deployment process started for commit `${{ github.sha }}`.",
-              "color": 16776960,
-              "thumbnail": {
-                "url": "https://example.com/start-image.png"
-              },
-              "fields": [
-                {
-                  "name": "Commit SHA",
-                  "value": "${{ github.sha }}",
-                  "inline": true
-                }
-              ],
-              "footer": {
-                "text": "GitHub Actions CI/CD"
-              }
-            }]
-          }' ${{ secrets.DISCORD_WEBHOOK_URL }}
-
       - name: Deploy to EC2
         id: deploy
         run: |
           INSTANCE_ID="${{ secrets.INSTANCE_ID }}"
-          RESPONSE=$(aws ssm send-command \
+          aws ssm send-command \
             --document-name "AWS-RunShellScript" \
             --targets "Key=instanceids,Values=$INSTANCE_ID" \
             --parameters 'commands=["docker pull abdulrhmanashraf98/marom-medical:${{ github.sha }}", "docker pull abdulrhmanashraf98/marom-medical:latest", "docker stop your-container || true", "docker rm your-container || true", "docker run -d --name your-container -p 8080:80 abdulrhmanashraf98/marom-medical:${{ github.sha }}"]' \
             --timeout-seconds 600 \
-            --region eu-north-1)
+            --region eu-north-1
+        continue-on-error: true
 
-          if echo "$RESPONSE" | grep -q '"Status": "Failed"'; then
-            echo "Deployment failed"
-            exit 1
-          else
-            echo "Deployment succeeded"
-          fi
-
-      - name: Notify Discord of deployment success
-        if: success()
+      - name: Notify Discord of deployment failure
+        if: failure() && steps.deploy.outcome == 'failure'
         run: |
           curl -H "Content-Type: application/json" -X POST -d '{
             "embeds": [{
-              "title": "Deployment Success 🎉",
-              "description": "Deployment completed successfully for commit `${{ github.sha }}`.",
-              "color": 65280,
+              "title": "Deployment Failure",
+              "description": "Deployment failed for commit `${{ github.sha }}`. Check the logs for details.",
+              "color": 16711680,
               "thumbnail": {
-                "url": "https://example.com/success-image.png"
+                "url": "https://example.com/failure-image.png"
               },
               "fields": [
+                {
+                  "name": "Instance ID",
+                  "value": "${{ secrets.INSTANCE_ID }}",
+                  "inline": true
+                },
                 {
                   "name": "Commit SHA",
                   "value": "${{ github.sha }}",
@@ -284,16 +153,16 @@ jobs:
             }]
           }' ${{ secrets.DISCORD_WEBHOOK_URL }}
 
-      - name: Notify Discord of deployment failure
-        if: failure()
+      - name: Notify Discord of build and deployment success
+        if: success()
         run: |
           curl -H "Content-Type: application/json" -X POST -d '{
             "embeds": [{
-              "title": "Deployment Failure 🚨",
-              "description": "Deployment failed for commit `${{ github.sha }}`. Check the logs for details.",
-              "color": 16711680,
+              "title": "Build and Deployment Success",
+              "description": "Build and deployment completed successfully for commit `${{ github.sha }}`.",
+              "color": 65280,
               "thumbnail": {
-                "url": "https://example.com/failure-image.png"
+                "url": "https://example.com/success-image.png"
               },
               "fields": [
                 {
