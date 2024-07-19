@@ -77,7 +77,7 @@ jobs:
       - name: Deploy to EC2
         if: success()
         run: |
-          INSTANCE_ID="your-ec2-instance-id"  # Replace with your EC2 instance ID
+          INSTANCE_ID="${{secrets.INSTANCE_ID}}"  # Replace with your EC2 instance ID
           aws ssm send-command \
             --document-name "AWS-RunShellScript" \
             --targets "Key=instanceids,Values=$INSTANCE_ID" \
