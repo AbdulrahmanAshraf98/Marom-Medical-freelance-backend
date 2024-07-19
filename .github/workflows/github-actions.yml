@@ -18,6 +18,25 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: |
+          npm install
+
+      - name: Run tests
+        run: |
+          npm test
+        continue-on-error: true
+
+      - name: Notify Discord of test failure
+        if: failure()
+        run: |
+          curl -H "Content-Type: application/json" -X POST -d '{"content": "Build process failed for commit '${{ github.sha }}'. Check the logs for details."}' ${{ secrets.DISCORD_WEBHOOK_URL }}
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
@@ -26,10 +45,6 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-
-      - name: Notify Discord of build start
-        run: |
-          curl -H "Content-Type: application/json" -X POST -d '{"content": "Build process started for commit '${{ github.sha }}'"}' ${{ secrets.DISCORD_WEBHOOK_URL }}
 
       - name: Build Docker image
         uses: docker/build-push-action@v4
@@ -48,15 +63,9 @@ jobs:
             DB_DATABASE=${{ secrets.DB_DATABASE }}
             DB_TYPE=${{ secrets.DB_TYPE }}
 
-      - name: Run tests
+      - name: Notify Discord of build start
         run: |
-          docker run --rm -v ${{ github.workspace }}:/app -w /app abdulrhmanashraf98/marom-medical:${{ github.sha }} npm test
-        continue-on-error: true
-
-      - name: Notify Discord of test failure
-        if: failure()
-        run: |
-          curl -H "Content-Type: application/json" -X POST -d '{"content": "Build process failed for commit '${{ github.sha }}'. Check the logs for details."}' ${{ secrets.DISCORD_WEBHOOK_URL }}
+          curl -H "Content-Type: application/json" -X POST -d '{"content": "Build process started for commit '${{ github.sha }}'"}' ${{ secrets.DISCORD_WEBHOOK_URL }}
 
       - name: Deploy to EC2
         if: success()
@@ -74,7 +83,7 @@ jobs:
         continue-on-error: true
 
       - name: Notify Discord of deployment failure
-        if: failure() && steps.build.outcome == 'success'
+        if: failure() && steps.deploy.outcome == 'failure'
         run: |
           curl -H "Content-Type: application/json" -X POST -d '{"content": "Deployment failed for commit '${{ github.sha }}'. Check the logs for details."}' ${{ secrets.DISCORD_WEBHOOK_URL }}
 

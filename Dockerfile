@@ -7,7 +7,6 @@ WORKDIR /app
 # Install NestJS dependencies
 COPY package*.json ./
 RUN npm install
-RUN npm install -g jest
 
 # Copy app source
 COPY . .
@@ -23,6 +22,7 @@ WORKDIR /app
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY package*.json ./
+RUN npm install -g jest
 
 # Set environment variables (use default values if needed)
 ARG APP_PORT=8000
