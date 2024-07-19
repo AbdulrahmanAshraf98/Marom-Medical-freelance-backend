@@ -7,6 +7,7 @@ WORKDIR /app
 # Install NestJS dependencies
 COPY package*.json ./
 RUN npm install
+RUN npm install -g jest
 
 # Copy app source
 COPY . .
