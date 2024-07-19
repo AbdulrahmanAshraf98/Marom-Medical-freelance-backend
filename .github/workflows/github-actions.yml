@@ -67,25 +67,26 @@ jobs:
             DB_DATABASE=${{ secrets.DB_DATABASE }}
             DB_TYPE=${{ secrets.DB_TYPE }}
 
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-north-1  # Updated to your region
+
       - name: Deploy to EC2
         if: success()
-        uses: appleboy/ssh-action@v0.1.1
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{secrets.EC2_USER}}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            docker pull abdulrhmanashraf98/marom-medical:${{ github.sha }}
-            docker pull abdulrhmanashraf98/marom-medical:latest
-            docker stop your-container || true
-            docker rm your-container || true
-            docker run -d --name your-container -p 80:80 abdulrhmanashraf98/marom-medical:${{ github.sha }}
-          debug: true
-        continue-on-error: true
-
+        run: |
+          INSTANCE_ID="your-ec2-instance-id"  # Replace with your EC2 instance ID
+          aws ssm send-command \
+            --document-name "AWS-RunShellScript" \
+            --targets "Key=instanceids,Values=$INSTANCE_ID" \
+            --parameters 'commands=["docker pull abdulrhmanashraf98/marom-medical:${{ github.sha }}", "docker pull abdulrhmanashraf98/marom-medical:latest", "docker stop your-container || true", "docker rm your-container || true", "docker run -d --name your-container -p 80:80 abdulrhmanashraf98/marom-medical:${{ github.sha }}"]' \
+            --timeout-seconds 600 \
+            --region eu-north-1
 
       - name: Notify Discord of deployment failure
-        if: failure() && steps.deploy.outcome == 'failure'
+        if: failure()
         run: |
           curl -H "Content-Type: application/json" -X POST -d '{"content": "Deployment failed for commit '${{ github.sha }}'. Check the logs for details."}' ${{ secrets.DISCORD_WEBHOOK_URL }}
 
