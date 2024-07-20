@@ -1,0 +1,12 @@
+{
+  "messages": {
+    "success_fetch": "نجاح جلب البيانات",
+    "success_create": "نجاح إنشاء البيانات",
+    "success_update": "نجاح تحديث البيانات",
+    "success_delete": "نجاح حذف البيانات",
+    "error_fetch": "خطأ في جلب البيانات",
+    "error_create": "خطأ في إنشاء البيانات",
+    "error_update": "خطأ في تحديث البيانات",
+    "error_delete": "خطأ في حذف البيانات"
+  }
+}
