@@ -8,80 +8,63 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
       - name: Set up AWS CLI
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v3
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: eu-north-1
 
-      - name: Notify Discord of deployment start
-        run: |
-          curl -H "Content-Type: application/json" -X POST -d '{
-            "embeds": [{
-              "title": "🚀 Deployment Started",
-              "description": "Deployment process started for commit `${{ github.sha }}`.",
-              "color": 16776960,
-              "thumbnail": {
-                "url": "https://example.com/start-image.png"
-              },
-              "fields": [
-                {
-                  "name": "Commit SHA",
-                  "value": "${{ github.sha }}",
-                  "inline": true
-                }
-              ],
-              "footer": {
-                "text": "GitHub Actions CI/CD"
-              }
-            }]
-          }' ${{ secrets.DISCORD_WEBHOOK_URL }}
+      - name: Set deployment variables
+        run: echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_ENV
 
-      - name: Deploy to EC2
+      - name: Log in to Docker Hub
+        run: |
+          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      - name: Build and push Docker image
+        run: |
+          docker build -t abdulrhmanashraf98/marom-medical:$IMAGE_TAG .
+          docker push abdulrhmanashraf98/marom-medical:$IMAGE_TAG
+
+      - name: Run AWS SSM Command
         id: deploy
         run: |
-          INSTANCE_ID="${{ secrets.INSTANCE_ID }}"
-          CONTAINER_NAME="${{ secrets.DOCKER_CONTAINER_NAME }}"
+          INSTANCE_ID="your_instance_id"
+          CONTAINER_NAME="your_container_name"
           IMAGE_TAG="${{ github.sha }}"
-
+          
           if [ -z "$CONTAINER_NAME" ]; then
             echo "Container name is not set. Please set the CONTAINER_NAME in secrets."
             exit 1
           fi
-
+          
           # Run AWS SSM Command
           RESPONSE=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
             --targets "Key=instanceids,Values=$INSTANCE_ID" \
             --parameters "commands=[
               \"docker pull abdulrhmanashraf98/marom-medical:$IMAGE_TAG\",
+              \"docker images -q | grep 'abdulrhmanashraf98/marom-medical' | xargs -r docker rmi -f\",
               \"docker ps -q -f name='$CONTAINER_NAME' | xargs -r docker stop\",
               \"docker ps -a -q -f name='$CONTAINER_NAME' | xargs -r docker rm\",
               \"docker run -d --name '$CONTAINER_NAME' -p 8080:80 abdulrhmanashraf98/marom-medical:$IMAGE_TAG\"
             ]" \
             --timeout-seconds 600 \
             --region eu-north-1)
-
+          
           # Extract Command ID
           COMMAND_ID=$(echo "$RESPONSE" | jq -r '.Command.CommandId')
-
+          
           if [ -z "$COMMAND_ID" ]; then
             echo "Failed to retrieve CommandId from SSM response."
             exit 1
           fi
-
+          
           # Wait for Command to Complete
           STATUS=""
           while [ "$STATUS" != "Success" ] && [ "$STATUS" != "Failed" ]; do
@@ -89,14 +72,14 @@ jobs:
             STATUS=$(aws ssm list-command-invocations --command-id "$COMMAND_ID" --details --query 'CommandInvocations[0].Status' --output text)
             echo "Current status: $STATUS"
           done
-
+          
           if [ "$STATUS" == "Failed" ]; then
             echo "Deployment failed"
             DEPLOY_LOG=$(aws ssm list-command-invocations --command-id "$COMMAND_ID" --details --query 'CommandInvocations[0].CommandPlugins[0].Output' --output text)
             curl -H "Content-Type: application/json" -X POST -d '{
               "embeds": [{
                 "title": "❌ Deployment Failure",
-                "description": "Deployment failed for commit `${{ github.sha }}`. Check the logs for details.",
+                "description": "Deployment failed for commit `'$IMAGE_TAG'`. Check the logs for details.",
                 "color": 16711680,
                 "thumbnail": {
                   "url": "https://example.com/failure-image.png"
@@ -110,64 +93,6 @@ jobs:
                   {
                     "name": "Commit SHA",
                     "value": "'"$IMAGE_TAG"'",
-                    "inline": true
-                  },
-                  {
-                    "name": "Error Log",
-                    "value": "```${DEPLOY_LOG}```"
-                  }
-                ],
-                "footer": {
-                  "text": "GitHub Actions CI/CD"
-                }
-              }]
-            }' ${{ secrets.DISCORD_WEBHOOK_URL }}
-            exit 1
-          fi
-
-      - name: Notify Discord of deployment result
-        if: always()
-        run: |
-          if [ "$STATUS" == "Success" ]; then
-            curl -H "Content-Type: application/json" -X POST -d '{
-              "embeds": [{
-                "title": "✅ Deployment Success",
-                "description": "Deployment completed successfully for commit `${{ github.sha }}`.",
-                "color": 65280,
-                "thumbnail": {
-                  "url": "https://example.com/success-image.png"
-                },
-                "fields": [
-                  {
-                    "name": "Commit SHA",
-                    "value": "${{ github.sha }}",
-                    "inline": true
-                  }
-                ],
-                "footer": {
-                  "text": "GitHub Actions CI/CD"
-                }
-              }]
-            }' ${{ secrets.DISCORD_WEBHOOK_URL }}
-          else
-            DEPLOY_LOG=$(aws ssm list-command-invocations --command-id "$COMMAND_ID" --details --query 'CommandInvocations[0].CommandPlugins[0].Output' --output text)
-            curl -H "Content-Type: application/json" -X POST -d '{
-              "embeds": [{
-                "title": "❌ Deployment Failure",
-                "description": "Deployment failed for commit `${{ github.sha }}`. Check the logs for details.",
-                "color": 16711680,
-                "thumbnail": {
-                  "url": "https://example.com/failure-image.png"
-                },
-                "fields": [
-                  {
-                    "name": "Instance ID",
-                    "value": "${{ secrets.INSTANCE_ID }}",
-                    "inline": true
-                  },
-                  {
-                    "name": "Commit SHA",
-                    "value": "${{ github.sha }}",
                     "inline": true
                   },
                   {
