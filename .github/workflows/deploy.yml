@@ -22,6 +22,11 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
+      - name: Install jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
       - name: Notify Discord of deployment start
         run: |
           curl -H "Content-Type: application/json" -X POST -d '{
@@ -57,6 +62,8 @@ jobs:
         run: |
           INSTANCE_ID="${{ secrets.INSTANCE_ID }}"
           CONTAINER_NAME="${{ secrets.DOCKER_CONTAINER_NAME }}"
+          
+          # Run AWS SSM Command
           RESPONSE=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
             --targets "Key=instanceids,Values=$INSTANCE_ID" \
@@ -64,12 +71,20 @@ jobs:
             --timeout-seconds 600 \
             --region eu-north-1)
 
+          # Extract Command ID
           COMMAND_ID=$(echo "$RESPONSE" | jq -r '.Command.CommandId')
-          STATUS=""
 
+          if [ -z "$COMMAND_ID" ]; then
+            echo "Failed to retrieve CommandId from SSM response."
+            exit 1
+          fi
+
+          # Wait for Command to Complete
+          STATUS=""
           while [ "$STATUS" != "Success" ] && [ "$STATUS" != "Failed" ]; do
             sleep 10
             STATUS=$(aws ssm list-command-invocations --command-id "$COMMAND_ID" --details --query 'CommandInvocations[0].Status' --output text)
+            echo "Current status: $STATUS"
           done
 
           if [ "$STATUS" == "Failed" ]; then
@@ -80,7 +95,7 @@ jobs:
       - name: Notify Discord of deployment result
         if: always()
         run: |
-          if [ $STATUS == 'Success' ]; then
+          if [ "$STATUS" == 'Success' ]; then
             curl -H "Content-Type: application/json" -X POST -d '{
               "embeds": [{
                 "title": "✅ Deployment Success",
