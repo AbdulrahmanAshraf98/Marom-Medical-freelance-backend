@@ -22,6 +22,29 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Notify Discord of test start
+        run: |
+          curl -H "Content-Type: application/json" -X POST -d '{
+            "embeds": [{
+              "title": "🛠️ Test Started",
+              "description": "Running tests for commit `${{ github.sha }}`.",
+              "color": 16776960,
+              "thumbnail": {
+                "url": "https://example.com/start-image.png"
+              },
+              "fields": [
+                {
+                  "name": "Commit SHA",
+                  "value": "${{ github.sha }}",
+                  "inline": true
+                }
+              ],
+              "footer": {
+                "text": "GitHub Actions CI/CD"
+              }
+            }]
+          }' ${{ secrets.DISCORD_WEBHOOK_URL }}
+
       - name: Run tests
         id: test
         run: npm test
@@ -31,13 +54,40 @@ jobs:
         if: always()
         run: |
           if [ ${{ steps.test.outcome }} == 'failure' ]; then
+            TEST_LOG=$(tail -n 10 /path/to/test/log)  # Update with the actual path to your test log
             curl -H "Content-Type: application/json" -X POST -d '{
               "embeds": [{
-                "title": "Test Failure",
+                "title": "❌ Test Failure",
                 "description": "Tests failed for commit `${{ github.sha }}`. Check the logs for details.",
                 "color": 16711680,
                 "thumbnail": {
                   "url": "https://example.com/failure-image.png"
+                },
+                "fields": [
+                  {
+                    "name": "Commit SHA",
+                    "value": "${{ github.sha }}",
+                    "inline": true
+                  },
+                  {
+                    "name": "Error Log",
+                    "value": "```${TEST_LOG}```"
+                  }
+                ],
+                "footer": {
+                  "text": "GitHub Actions CI/CD"
+                }
+              }]
+            }' ${{ secrets.DISCORD_WEBHOOK_URL }}
+            exit 1
+          else
+            curl -H "Content-Type: application/json" -X POST -d '{
+              "embeds": [{
+                "title": "✅ Test Success",
+                "description": "Tests passed for commit `${{ github.sha }}`.",
+                "color": 65280,
+                "thumbnail": {
+                  "url": "https://example.com/success-image.png"
                 },
                 "fields": [
                   {
@@ -51,7 +101,6 @@ jobs:
                 }
               }]
             }' ${{ secrets.DISCORD_WEBHOOK_URL }}
-            exit 1
           fi
 
       - name: Log in to Docker Hub
@@ -67,7 +116,7 @@ jobs:
         run: |
           curl -H "Content-Type: application/json" -X POST -d '{
             "embeds": [{
-              "title": "Build Started",
+              "title": "🔨 Build Started",
               "description": "Build process started for commit `${{ github.sha }}`.",
               "color": 16776960,
               "thumbnail": {
@@ -102,7 +151,7 @@ jobs:
           if [ ${{ steps.build.outcome }} == 'success' ]; then
             curl -H "Content-Type: application/json" -X POST -d '{
               "embeds": [{
-                "title": "Build Success",
+                "title": "✅ Build Success",
                 "description": "Build completed successfully for commit `${{ github.sha }}`.",
                 "color": 65280,
                 "thumbnail": {
@@ -121,9 +170,10 @@ jobs:
               }]
             }' ${{ secrets.DISCORD_WEBHOOK_URL }}
           else
+            BUILD_LOG=$(tail -n 10 /path/to/build/log)  # Update with the actual path to your build log
             curl -H "Content-Type: application/json" -X POST -d '{
               "embeds": [{
-                "title": "Build Failure",
+                "title": "❌ Build Failure",
                 "description": "Build failed for commit `${{ github.sha }}`. Check the logs for details.",
                 "color": 16711680,
                 "thumbnail": {
@@ -134,6 +184,10 @@ jobs:
                     "name": "Commit SHA",
                     "value": "${{ github.sha }}",
                     "inline": true
+                  },
+                  {
+                    "name": "Error Log",
+                    "value": "```${BUILD_LOG}```"
                   }
                 ],
                 "footer": {
