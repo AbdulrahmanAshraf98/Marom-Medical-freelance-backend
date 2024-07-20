@@ -34,7 +34,7 @@ jobs:
     - name: Deploy to EC2
       run: |
         INSTANCE_ID="${{ secrets.INSTANCE_ID }}"
-        CONTAINER_NAME="${{ secrets.CONTAINER_NAME }}"
+        CONTAINER_NAME="${{ secrets.DOCKER_CONTAINER_NAME }}"
         IMAGE_TAG="${{ github.sha }}"
 
         if [ -z "$CONTAINER_NAME" ]; then
