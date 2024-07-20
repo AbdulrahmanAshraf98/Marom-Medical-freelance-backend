@@ -1,79 +1,58 @@
-name: CI/CD Pipeline
+name: Deploy to EC2
 
 on:
   push:
     branches:
       - main
-      - dev
-  pull_request:
-    branches:
-      - main
-      - dev
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v3
         with:
-          node-version: '18'
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-north-1
 
-      - name: Install dependencies
-        run: |
-          npm install
-
-      - name: Run tests
-        id: test
-        run: |
-          npm test
-        continue-on-error: true
-
-      - name: Notify Discord of test result
-        if: always()
-        run: |
-          if [ ${{ steps.test.outcome }} == 'failure' ]; then
-            curl -H "Content-Type: application/json" -X POST -d '{
-              "embeds": [{
-                "title": "Test Failure",
-                "description": "Tests failed for commit `${{ github.sha }}`. Check the logs for details.",
-                "color": 16711680,
-                "thumbnail": {
-                  "url": "https://example.com/failure-image.png"
-                },
-                "fields": [
-                  {
-                    "name": "Commit SHA",
-                    "value": "${{ github.sha }}",
-                    "inline": true
-                  }
-                ],
-                "footer": {
-                  "text": "GitHub Actions CI/CD"
-                }
-              }]
-            }' ${{ secrets.DISCORD_WEBHOOK_URL }}
-            exit 1
-          fi
+      - name: Set deployment variables
+        run: echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_ENV
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: |
+            abdulrhmanashraf98/marom-medical:${{ github.sha }}
+            abdulrhmanashraf98/marom-medical:latest
+          build-args: |
+            APP_PORT=${{ secrets.APP_PORT }}
+            DB_HOST=${{ secrets.DB_HOST }}
+            DB_PORT=${{ secrets.DB_PORT }}
+            DB_USERNAME=${{ secrets.DB_USERNAME }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            DB_DATABASE=${{ secrets.DB_DATABASE }}
+            DB_TYPE=${{ secrets.DB_TYPE }}
 
       - name: Notify Discord of build start
         run: |
           curl -H "Content-Type: application/json" -X POST -d '{
             "embeds": [{
-              "title": "Build Started",
+              "title": "🔨 Build Started",
               "description": "Build process started for commit `${{ github.sha }}`.",
               "color": 16776960,
               "thumbnail": {
@@ -92,88 +71,43 @@ jobs:
             }]
           }' ${{ secrets.DISCORD_WEBHOOK_URL }}
 
-      - name: Build Docker image
-        id: build
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          push: true
-          tags: |
-            abdulrhmanashraf98/marom-medical:${{ github.sha }}
-            abdulrhmanashraf98/marom-medical:latest
-          build-args: |
-            APP_PORT=${{ secrets.APP_PORT }}
-            DB_HOST=${{ secrets.DB_HOST }}
-            DB_PORT=${{ secrets.DB_PORT }}
-            DB_USERNAME=${{ secrets.DB_USERNAME }}
-            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-            DB_DATABASE=${{ secrets.DB_DATABASE }}
-            DB_TYPE=${{ secrets.DB_TYPE }}
-
-      - name: Notify Discord of build result
-        if: always()
+      - name: Deploy to EC2
         run: |
-          if [ ${{ steps.build.outcome }} == 'success' ]; then
-            curl -H "Content-Type: application/json" -X POST -d '{
-              "embeds": [{
-                "title": "Build Success",
-                "description": "Build completed successfully for commit `${{ github.sha }}`.",
-                "color": 65280,
-                "thumbnail": {
-                  "url": "https://example.com/success-image.png"
-                },
-                "fields": [
-                  {
-                    "name": "Commit SHA",
-                    "value": "${{ github.sha }}",
-                    "inline": true
-                  }
-                ],
-                "footer": {
-                  "text": "GitHub Actions CI/CD"
-                }
-              }]
-            }' ${{ secrets.DISCORD_WEBHOOK_URL }}
-          else
-            curl -H "Content-Type: application/json" -X POST -d '{
-              "embeds": [{
-                "title": "Build Failure",
-                "description": "Build failed for commit `${{ github.sha }}`. Check the logs for details.",
-                "color": 16711680,
-                "thumbnail": {
-                  "url": "https://example.com/failure-image.png"
-                },
-                "fields": [
-                  {
-                    "name": "Commit SHA",
-                    "value": "${{ github.sha }}",
-                    "inline": true
-                  }
-                ],
-                "footer": {
-                  "text": "GitHub Actions CI/CD"
-                }
-              }]
-            }' ${{ secrets.DISCORD_WEBHOOK_URL }}
+          INSTANCE_ID="${{ secrets.INSTANCE_ID }}"
+          CONTAINER_NAME="${{ secrets.DOCKER_CONTAINER_NAME }}"
+          IMAGE_TAG="${{ github.sha }}"
+          
+          if [ -z "$CONTAINER_NAME" ]; then
+            echo "Container name is not set. Please set the CONTAINER_NAME in secrets."
             exit 1
           fi
 
-      - name: Set up AWS CLI
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: eu-north-1
+          # Run AWS SSM Command
+          RESPONSE=$(aws ssm send-command \
+            --document-name "AWS-RunShellScript" \
+            --targets "Key=instanceids,Values=$INSTANCE_ID" \
+            --parameters "commands=[
+              \"docker pull abdulrhmanashraf98/marom-medical:$IMAGE_TAG\",
+              \"docker images -q | grep 'abdulrhmanashraf98/marom-medical' | xargs -r docker rmi -f\",
+              \"docker images -f 'dangling=true' -q | xargs -r docker rmi -f\",
+              \"docker ps -q -f name='$CONTAINER_NAME' | xargs -r docker stop\",
+              \"docker ps -a -q -f name='$CONTAINER_NAME' | xargs -r docker rm\",
+              \"docker run -d --name '$CONTAINER_NAME' -p 8080:80 abdulrhmanashraf98/marom-medical:$IMAGE_TAG\"
+            ]" \
+            --timeout-seconds 600 \
+            --region eu-north-1)
 
-      - name: Notify Discord of deployment start
+          echo "Deployment response: $RESPONSE"
+
+      - name: Notify Discord of deployment
         run: |
           curl -H "Content-Type: application/json" -X POST -d '{
             "embeds": [{
-              "title": "Deployment Started",
-              "description": "Deployment process started for commit `${{ github.sha }}`.",
-              "color": 16776960,
+              "title": "🚀 Deployment Completed",
+              "description": "Deployment to EC2 instance completed for commit `${{ github.sha }}`.",
+              "color": 65280,
               "thumbnail": {
-                "url": "https://example.com/start-image.png"
+                "url": "https://example.com/success-image.png"
               },
               "fields": [
                 {
@@ -187,132 +121,3 @@ jobs:
               }
             }]
           }' ${{ secrets.DISCORD_WEBHOOK_URL }}
-
-      - name: Deploy to EC2
-        id: deploy
-        run: |
-          INSTANCE_ID="${{ secrets.INSTANCE_ID }}"
-          RESPONSE=$(aws ssm send-command \
-            --document-name "AWS-RunShellScript" \
-            --targets "Key=instanceids,Values=$INSTANCE_ID" \
-            --parameters 'commands=["docker pull abdulrhmanashraf98/marom-medical:${{ github.sha }}", "docker pull abdulrhmanashraf98/marom-medical:latest", "docker stop your-container || true", "docker rm your-container || true", "docker run -d --name your-container -p 8080:80 abdulrhmanashraf98/marom-medical:${{ github.sha }}"]' \
-            --timeout-seconds 600 \
-            --region eu-north-1)
-
-          if echo "$RESPONSE" | grep -q '"Status": "Failed"'; then
-            echo "Deployment failed"
-            exit 1
-          fi
-
-      - name: Clean up old Docker images
-        run: |
-          INSTANCE_ID="${{ secrets.INSTANCE_ID }}"
-          CLEANUP_RESPONSE=$(aws ssm send-command \
-            --document-name "AWS-RunShellScript" \
-            --targets "Key=instanceids,Values=$INSTANCE_ID" \
-            --parameters 'commands=["docker images 'abdulrhmanashraf98/marom-medical' --format '{{.ID}}' | grep -v $(docker images 'abdulrhmanashraf98/marom-medical:latest' --format '{{.ID}}') | xargs -r docker rmi -f"]' \
-            --timeout-seconds 600 \
-            --region eu-north-1)
-
-          CLEANUP_COMMAND_ID=$(echo "$CLEANUP_RESPONSE" | jq -r '.Command.CommandId')
-
-          if [ -z "$CLEANUP_COMMAND_ID" ]; then
-            echo "Failed to retrieve Cleanup CommandId from SSM response."
-            exit 1
-          fi
-
-          CLEANUP_STATUS=""
-          while [ "$CLEANUP_STATUS" != "Success" ] && [ "$CLEANUP_STATUS" != "Failed" ]; do
-            sleep 10
-            CLEANUP_STATUS=$(aws ssm list-command-invocations --command-id "$CLEANUP_COMMAND_ID" --details --query 'CommandInvocations[0].Status' --output text)
-            echo "Cleanup current status: $CLEANUP_STATUS"
-          done
-
-          if [ "$CLEANUP_STATUS" == "Failed" ]; then
-            echo "Cleanup failed"
-            CLEANUP_LOG=$(aws ssm list-command-invocations --command-id "$CLEANUP_COMMAND_ID" --details --query 'CommandInvocations[0].CommandPlugins[0].Output' --output text)
-            curl -H "Content-Type: application/json" -X POST -d '{
-              "embeds": [{
-                "title": "❌ Cleanup Failure",
-                "description": "Cleanup failed after deployment for commit `${{ github.sha }}`. Check the logs for details.",
-                "color": 16711680,
-                "thumbnail": {
-                  "url": "https://example.com/failure-image.png"
-                },
-                "fields": [
-                  {
-                    "name": "Instance ID",
-                    "value": "${{ secrets.INSTANCE_ID }}",
-                    "inline": true
-                  },
-                  {
-                    "name": "Commit SHA",
-                    "value": "${{ github.sha }}",
-                    "inline": true
-                  },
-                  {
-                    "name": "Logs",
-                    "value": "$CLEANUP_LOG",
-                    "inline": false
-                  }
-                ],
-                "footer": {
-                  "text": "GitHub Actions CI/CD"
-                }
-              }]
-            }' ${{ secrets.DISCORD_WEBHOOK_URL }}
-            exit 1
-          fi
-
-      - name: Notify Discord of deployment result
-        if: always()
-        run: |
-          if [ ${{ steps.deploy.outcome }} == 'success' ]; then
-            curl -H "Content-Type: application/json" -X POST -d '{
-              "embeds": [{
-                "title": "Deployment Success",
-                "description": "Deployment completed successfully for commit `${{ github.sha }}`.",
-                "color": 65280,
-                "thumbnail": {
-                  "url": "https://example.com/success-image.png"
-                },
-                "fields": [
-                  {
-                    "name": "Commit SHA",
-                    "value": "${{ github.sha }}",
-                    "inline": true
-                  }
-                ],
-                "footer": {
-                  "text": "GitHub Actions CI/CD"
-                }
-              }]
-            }' ${{ secrets.DISCORD_WEBHOOK_URL }}
-          else
-            curl -H "Content-Type: application/json" -X POST -d '{
-              "embeds": [{
-                "title": "Deployment Failure",
-                "description": "Deployment failed for commit `${{ github.sha }}`. Check the logs for details.",
-                "color": 16711680,
-                "thumbnail": {
-                  "url": "https://example.com/failure-image.png"
-                },
-                "fields": [
-                  {
-                    "name": "Instance ID",
-                    "value": "${{ secrets.INSTANCE_ID }}",
-                    "inline": true
-                  },
-                  {
-                    "name": "Commit SHA",
-                    "value": "${{ github.sha }}",
-                    "inline": true
-                  }
-                ],
-                "footer": {
-                  "text": "GitHub Actions CI/CD"
-                }
-              }]
-            }' ${{ secrets.DISCORD_WEBHOOK_URL }}
-            exit 1
-          fi
