@@ -1,4 +1,4 @@
-name: Deploy
+name: Deploy to EC2
 
 on:
   push:
@@ -19,13 +19,12 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      - name: Install jq
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-north-1
 
       - name: Notify Discord of deployment start
         run: |
@@ -50,19 +49,12 @@ jobs:
             }]
           }' ${{ secrets.DISCORD_WEBHOOK_URL }}
 
-      - name: Set up AWS CLI
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: eu-north-1
-
       - name: Deploy to EC2
         id: deploy
         run: |
           INSTANCE_ID="${{ secrets.INSTANCE_ID }}"
           CONTAINER_NAME="${{ secrets.DOCKER_CONTAINER_NAME }}"
-          
+
           # Run AWS SSM Command
           RESPONSE=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
@@ -89,34 +81,6 @@ jobs:
 
           if [ "$STATUS" == "Failed" ]; then
             echo "Deployment failed"
-            exit 1
-          fi
-
-      - name: Notify Discord of deployment result
-        if: always()
-        run: |
-          if [ "$STATUS" == 'Success' ]; then
-            curl -H "Content-Type: application/json" -X POST -d '{
-              "embeds": [{
-                "title": "✅ Deployment Success",
-                "description": "Deployment completed successfully for commit `${{ github.sha }}`.",
-                "color": 65280,
-                "thumbnail": {
-                  "url": "https://example.com/success-image.png"
-                },
-                "fields": [
-                  {
-                    "name": "Commit SHA",
-                    "value": "${{ github.sha }}",
-                    "inline": true
-                  }
-                ],
-                "footer": {
-                  "text": "GitHub Actions CI/CD"
-                }
-              }]
-            }' ${{ secrets.DISCORD_WEBHOOK_URL }}
-          else
             DEPLOY_LOG=$(aws ssm list-command-invocations --command-id "$COMMAND_ID" --details --query 'CommandInvocations[0].CommandPlugins[0].Output' --output text)
             curl -H "Content-Type: application/json" -X POST -d '{
               "embeds": [{
@@ -148,4 +112,30 @@ jobs:
               }]
             }' ${{ secrets.DISCORD_WEBHOOK_URL }}
             exit 1
+          fi
+
+      - name: Notify Discord of deployment result
+        if: always()
+        run: |
+          if [ "$STATUS" == 'Success' ]; then
+            curl -H "Content-Type: application/json" -X POST -d '{
+              "embeds": [{
+                "title": "✅ Deployment Success",
+                "description": "Deployment completed successfully for commit `${{ github.sha }}`.",
+                "color": 65280,
+                "thumbnail": {
+                  "url": "https://example.com/success-image.png"
+                },
+                "fields": [
+                  {
+                    "name": "Commit SHA",
+                    "value": "${{ github.sha }}",
+                    "inline": true
+                  }
+                ],
+                "footer": {
+                  "text": "GitHub Actions CI/CD"
+                }
+              }]
+            }' ${{ secrets.DISCORD_WEBHOOK_URL }}
           fi
