@@ -76,7 +76,7 @@ jobs:
           INSTANCE_ID="${{ secrets.INSTANCE_ID }}"
           CONTAINER_NAME="${{ secrets.DOCKER_CONTAINER_NAME }}"
           IMAGE_TAG="${{ github.sha }}"
-          
+
           if [ -z "$CONTAINER_NAME" ]; then
             echo "Container name is not set. Please set the CONTAINER_NAME in secrets."
             exit 1
@@ -97,6 +97,10 @@ jobs:
             --region eu-north-1)
 
           echo "Deployment response: $RESPONSE"
+
+      - name: Clean up old Docker images
+        run: |
+          docker images -q | grep 'abdulrhmanashraf98/marom-medical' | xargs -r docker rmi -f
 
       - name: Notify Discord of deployment
         run: |
