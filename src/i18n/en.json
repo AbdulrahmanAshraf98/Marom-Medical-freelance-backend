@@ -1,0 +1,12 @@
+{
+  "messages": {
+    "success_fetch": "success fetch data",
+    "success_create": "success create data",
+    "success_update": "success update data",
+    "success_delete": "success delete  data",
+    "error_fetch": "success fetch data",
+    "error_create": "success create data",
+    "error_update": "success update data",
+    "error_delete": "success delete  data"
+  }
+}
