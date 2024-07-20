@@ -106,3 +106,4 @@ jobs:
           }' ${{ secrets.DISCORD_WEBHOOK_URL }}
           exit 1
         fi
+      shell: /usr/bin/bash -e {0}
