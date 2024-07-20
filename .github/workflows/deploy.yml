@@ -100,27 +100,65 @@ jobs:
 
       - name: Clean up old Docker images
         run: |
-          docker images -q | grep 'abdulrhmanashraf98/marom-medical' | xargs -r docker rmi -f
-
-      - name: Notify Discord of deployment
-        run: |
-          curl -H "Content-Type: application/json" -X POST -d '{
-            "embeds": [{
-              "title": "🚀 Deployment Completed",
-              "description": "Deployment to EC2 instance completed for commit `${{ github.sha }}`.",
-              "color": 65280,
-              "thumbnail": {
-                "url": "https://example.com/success-image.png"
-              },
-              "fields": [
-                {
-                  "name": "Commit SHA",
-                  "value": "${{ github.sha }}",
-                  "inline": true
+          INSTANCE_ID="${{ secrets.INSTANCE_ID }}"
+          
+          # Run AWS SSM Command to clean up old Docker images
+          CLEANUP_RESPONSE=$(aws ssm send-command \
+            --document-name "AWS-RunShellScript" \
+            --targets "Key=instanceids,Values=$INSTANCE_ID" \
+            --parameters "commands=[
+              \"docker images 'abdulrhmanashraf98/marom-medical' --format '{{.ID}}' | grep -v $(docker images 'abdulrhmanashraf98/marom-medical:latest' --format '{{.ID}}') | xargs -r docker rmi -f\"
+            ]" \
+            --timeout-seconds 600 \
+            --region eu-north-1)
+  
+          # Extract Command ID for cleanup
+          CLEANUP_COMMAND_ID=$(echo "$CLEANUP_RESPONSE" | jq -r '.Command.CommandId')
+  
+          if [ -z "$CLEANUP_COMMAND_ID" ]; then
+            echo "Failed to retrieve Cleanup CommandId from SSM response."
+            exit 1
+          fi
+  
+          # Wait for Cleanup Command to Complete
+          CLEANUP_STATUS=""
+          while [ "$CLEANUP_STATUS" != "Success" ] && [ "$CLEANUP_STATUS" != "Failed" ]; do
+            sleep 10
+            CLEANUP_STATUS=$(aws ssm list-command-invocations --command-id "$CLEANUP_COMMAND_ID" --details --query 'CommandInvocations[0].Status' --output text)
+            echo "Cleanup current status: $CLEANUP_STATUS"
+          done
+  
+          if [ "$CLEANUP_STATUS" == "Failed" ]; then
+            echo "Cleanup failed"
+            CLEANUP_LOG=$(aws ssm list-command-invocations --command-id "$CLEANUP_COMMAND_ID" --details --query 'CommandInvocations[0].CommandPlugins[0].Output' --output text)
+            curl -H "Content-Type: application/json" -X POST -d '{
+              "embeds": [{
+                "title": "❌ Cleanup Failure",
+                "description": "Cleanup failed after deployment for commit `'$IMAGE_TAG'`. Check the logs for details.",
+                "color": 16711680,
+                "thumbnail": {
+                  "url": "https://example.com/failure-image.png"
+                },
+                "fields": [
+                  {
+                    "name": "Instance ID",
+                    "value": "'"$INSTANCE_ID"'",
+                    "inline": true
+                  },
+                  {
+                    "name": "Commit SHA",
+                    "value": "'"$IMAGE_TAG"'",
+                    "inline": true
+                  },
+                  {
+                    "name": "Error Log",
+                    "value": "```${CLEANUP_LOG}```"
+                  }
+                ],
+                "footer": {
+                  "text": "GitHub Actions CI/CD"
                 }
-              ],
-              "footer": {
-                "text": "GitHub Actions CI/CD"
-              }
-            }]
-          }' ${{ secrets.DISCORD_WEBHOOK_URL }}
+              }]
+            }' ${{ secrets.DISCORD_WEBHOOK_URL }}
+            exit 1
+          fi
