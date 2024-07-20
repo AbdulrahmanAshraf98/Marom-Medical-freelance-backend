@@ -26,10 +26,11 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: eu-north-1
 
-      - name: Debug Container Name
-        run: echo "Container Name: $CONTAINER_NAME"
+      - name: Debug Environment Variables
+        run: |
+          echo "Container Name: ${{ secrets.DOCKER_CONTAINER_NAME }}"
         env:
-          CONTAINER_NAME: ${{ secrets.DOCKER_CONTAINER_NAME }}
+          DOCKER_CONTAINER_NAME: ${{ secrets.DOCKER_CONTAINER_NAME }}
 
       - name: Notify Discord of deployment start
         run: |
@@ -69,12 +70,11 @@ jobs:
           RESPONSE=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
             --targets "Key=instanceids,Values=$INSTANCE_ID" \
-            --parameters 'commands=[
-              "docker pull abdulrhmanashraf98/marom-medical:${{ github.sha }}",
-              "if docker ps -q -f name='$CONTAINER_NAME'; then docker stop '$CONTAINER_NAME'; fi",
-              "if docker ps -a -q -f name='$CONTAINER_NAME'; then docker rm '$CONTAINER_NAME'; fi",
-              "docker run -d --name '$CONTAINER_NAME' -p 8080:80 abdulrhmanashraf98/marom-medical:${{ github.sha }}"
-            ]' \
+            --parameters commands="
+              docker pull abdulrhmanashraf98/marom-medical:${{ github.sha }};
+              if docker ps -q -f name='$CONTAINER_NAME'; then docker stop '$CONTAINER_NAME'; fi;
+              if docker ps -a -q -f name='$CONTAINER_NAME'; then docker rm '$CONTAINER_NAME'; fi;
+              docker run -d --name '$CONTAINER_NAME' -p 8080:80 abdulrhmanashraf98/marom-medical:${{ github.sha }}"
             --timeout-seconds 600 \
             --region eu-north-1)
 
