@@ -82,14 +82,14 @@ jobs:
             exit 1
           fi
 
-          # Run AWS SSM Command
-          RESPONSE=$(aws ssm send-command \
+           RESPONSE=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
             --targets "Key=instanceids,Values=$INSTANCE_ID" \
             --parameters "commands=[
               \"docker pull abdulrhmanashraf98/marom-medical:$IMAGE_TAG\",
               \"docker images -q | grep 'abdulrhmanashraf98/marom-medical' | xargs -r docker rmi -f\",
               \"docker images -f 'dangling=true' -q | xargs -r docker rmi -f\",
+              \"docker system prune -af\",
               \"docker ps -q -f name='$CONTAINER_NAME' | xargs -r docker stop\",
               \"docker ps -a -q -f name='$CONTAINER_NAME' | xargs -r docker rm\",
               \"docker run -d --name '$CONTAINER_NAME' -p 8080:80 abdulrhmanashraf98/marom-medical:$IMAGE_TAG\"
