@@ -26,7 +26,7 @@ jobs:
         run: |
           curl -H "Content-Type: application/json" -X POST -d '{
             "embeds": [{
-              "title": "Deployment Started",
+              "title": "🚀 Deployment Started",
               "description": "Deployment process started for commit `${{ github.sha }}`.",
               "color": 16776960,
               "thumbnail": {
@@ -74,7 +74,7 @@ jobs:
           if [ ${{ steps.deploy.outcome }} == 'success' ]; then
             curl -H "Content-Type: application/json" -X POST -d '{
               "embeds": [{
-                "title": "Deployment Success",
+                "title": "✅ Deployment Success",
                 "description": "Deployment completed successfully for commit `${{ github.sha }}`.",
                 "color": 65280,
                 "thumbnail": {
@@ -93,9 +93,10 @@ jobs:
               }]
             }' ${{ secrets.DISCORD_WEBHOOK_URL }}
           else
+            DEPLOY_LOG=$(tail -n 10 /path/to/deploy/log)  # Update with the actual path to your deploy log
             curl -H "Content-Type: application/json" -X POST -d '{
               "embeds": [{
-                "title": "Deployment Failure",
+                "title": "❌ Deployment Failure",
                 "description": "Deployment failed for commit `${{ github.sha }}`. Check the logs for details.",
                 "color": 16711680,
                 "thumbnail": {
@@ -111,6 +112,10 @@ jobs:
                     "name": "Commit SHA",
                     "value": "${{ github.sha }}",
                     "inline": true
+                  },
+                  {
+                    "name": "Error Log",
+                    "value": "```${DEPLOY_LOG}```"
                   }
                 ],
                 "footer": {
