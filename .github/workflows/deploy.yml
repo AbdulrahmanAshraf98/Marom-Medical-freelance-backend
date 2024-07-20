@@ -67,8 +67,8 @@ jobs:
             --targets "Key=instanceids,Values=$INSTANCE_ID" \
             --parameters "commands=[
               \"docker pull abdulrhmanashraf98/marom-medical:$IMAGE_TAG\",
-              \"if docker ps -q -f name='$CONTAINER_NAME'; then docker stop '$CONTAINER_NAME'; fi\",
-              \"if docker ps -a -q -f name='$CONTAINER_NAME'; then docker rm '$CONTAINER_NAME'; fi\",
+              \"docker ps -q -f name='$CONTAINER_NAME' | xargs -r docker stop\",
+              \"docker ps -a -q -f name='$CONTAINER_NAME' | xargs -r docker rm\",
               \"docker run -d --name '$CONTAINER_NAME' -p 8080:80 abdulrhmanashraf98/marom-medical:$IMAGE_TAG\"
             ]" \
             --timeout-seconds 600 \
@@ -96,7 +96,7 @@ jobs:
             curl -H "Content-Type: application/json" -X POST -d '{
               "embeds": [{
                 "title": "❌ Deployment Failure",
-                "description": "Deployment failed for commit `'$IMAGE_TAG'`. Check the logs for details.",
+                "description": "Deployment failed for commit `${{ github.sha }}`. Check the logs for details.",
                 "color": 16711680,
                 "thumbnail": {
                   "url": "https://example.com/failure-image.png"
