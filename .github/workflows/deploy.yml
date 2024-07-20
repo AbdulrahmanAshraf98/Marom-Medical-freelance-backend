@@ -76,48 +76,64 @@ jobs:
           INSTANCE_ID="${{ secrets.INSTANCE_ID }}"
           CONTAINER_NAME="${{ secrets.DOCKER_CONTAINER_NAME }}"
           IMAGE_TAG="${{ github.sha }}"
+          DISCORD_WEBHOOK_URL="${{ secrets.DISCORD_WEBHOOK_URL }}"
+          SUCCESS=true
           
-          if [ -z "$CONTAINER_NAME" ]; then
-            echo "Container name is not set. Please set the CONTAINER_NAME in secrets."
-            exit 1
-          fi
+          # Function to send a Discord notification
+          send_discord_notification() {
+            local title="$1"
+            local description="$2"
+            local color="$3"
+            curl -H "Content-Type: application/json" -X POST -d '{
+              "embeds": [{
+                "title": "'"$title"'",
+                "description": "'"$description"'",
+                "color": '"$color"',
+                "fields": [
+                  {
+                    "name": "Commit SHA",
+                    "value": "'"${{ github.sha }}"'",
+                    "inline": true
+                  }
+                ],
+                "footer": {
+                  "text": "GitHub Actions CI/CD"
+                }
+              }]
+            }' $DISCORD_WEBHOOK_URL
+          }
+          
+          # Send build start notification
+          send_discord_notification "🔨 Build Started" "Build process started for commit `${{ github.sha }}`." 16776960
 
-           RESPONSE=$(aws ssm send-command \
+          # Run AWS SSM Command and handle response
+          RESPONSE=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
             --targets "Key=instanceids,Values=$INSTANCE_ID" \
             --parameters "commands=[
               \"docker pull abdulrhmanashraf98/marom-medical:$IMAGE_TAG\",
+              \"docker ps -q -f name='$CONTAINER_NAME' | xargs -r docker stop\",
+              \"docker ps -a -q -f name='$CONTAINER_NAME' | xargs -r docker rm\",
               \"docker images -q | grep 'abdulrhmanashraf98/marom-medical' | xargs -r docker rmi -f\",
               \"docker images -f 'dangling=true' -q | xargs -r docker rmi -f\",
               \"docker system prune -af\",
-              \"docker ps -q -f name='$CONTAINER_NAME' | xargs -r docker stop\",
-              \"docker ps -a -q -f name='$CONTAINER_NAME' | xargs -r docker rm\",
               \"docker run -d --name '$CONTAINER_NAME' -p 8080:80 abdulrhmanashraf98/marom-medical:$IMAGE_TAG\"
             ]" \
             --timeout-seconds 600 \
             --region eu-north-1)
+          
+          # Check if the command was successful
+          if [ $? -eq 0 ]; then
+            send_discord_notification "🚀 Deployment Completed" "Deployment to EC2 instance completed successfully for commit `${{ github.sha }}`." 65280
+          else
+            send_discord_notification "❌ Deployment Failed" "Deployment to EC2 instance failed for commit `${{ github.sha }}`. Please check the logs for more details." 16711680
+            SUCCESS=false
+          fi
 
           echo "Deployment response: $RESPONSE"
 
-      - name: Notify Discord of deployment
-        run: |
-          curl -H "Content-Type: application/json" -X POST -d '{
-            "embeds": [{
-              "title": "🚀 Deployment Completed",
-              "description": "Deployment to EC2 instance completed for commit `${{ github.sha }}`.",
-              "color": 65280,
-              "thumbnail": {
-                "url": "https://example.com/success-image.png"
-              },
-              "fields": [
-                {
-                  "name": "Commit SHA",
-                  "value": "${{ github.sha }}",
-                  "inline": true
-                }
-              ],
-              "footer": {
-                "text": "GitHub Actions CI/CD"
-              }
-            }]
-          }' ${{ secrets.DISCORD_WEBHOOK_URL }}
+          # Exit with failure if the deployment failed
+          if [ "$SUCCESS" = false ]; then
+            exit 1
+          fi
+
