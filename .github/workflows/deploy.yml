@@ -56,14 +56,23 @@ jobs:
         id: deploy
         run: |
           INSTANCE_ID="${{ secrets.INSTANCE_ID }}"
+          CONTAINER_NAME="${{ secrets.DOCKER_CONTAINER_NAME }}"
           RESPONSE=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
             --targets "Key=instanceids,Values=$INSTANCE_ID" \
-            --parameters 'commands=["docker pull abdulrhmanashraf98/marom-medical:${{ github.sha }}", "docker pull abdulrhmanashraf98/marom-medical:latest", "docker stop your-container || true", "docker rm your-container || true", "docker run -d --name your-container -p 8080:80 abdulrhmanashraf98/marom-medical:${{ github.sha }}"]' \
+            --parameters 'commands=["docker pull abdulrhmanashraf98/marom-medical:${{ github.sha }}", "docker stop $CONTAINER_NAME || true", "docker rm $CONTAINER_NAME || true", "docker run -d --name $CONTAINER_NAME -p 8080:80 abdulrhmanashraf98/marom-medical:${{ github.sha }}"]' \
             --timeout-seconds 600 \
             --region eu-north-1)
 
-          if echo "$RESPONSE" | grep -q '"Status": "Failed"'; then
+          COMMAND_ID=$(echo "$RESPONSE" | jq -r '.Command.CommandId')
+          STATUS=""
+
+          while [ "$STATUS" != "Success" ] && [ "$STATUS" != "Failed" ]; do
+            sleep 10
+            STATUS=$(aws ssm list-command-invocations --command-id "$COMMAND_ID" --details --query 'CommandInvocations[0].Status' --output text)
+          done
+
+          if [ "$STATUS" == "Failed" ]; then
             echo "Deployment failed"
             exit 1
           fi
@@ -71,7 +80,7 @@ jobs:
       - name: Notify Discord of deployment result
         if: always()
         run: |
-          if [ ${{ steps.deploy.outcome }} == 'success' ]; then
+          if [ $STATUS == 'Success' ]; then
             curl -H "Content-Type: application/json" -X POST -d '{
               "embeds": [{
                 "title": "✅ Deployment Success",
@@ -93,7 +102,7 @@ jobs:
               }]
             }' ${{ secrets.DISCORD_WEBHOOK_URL }}
           else
-            DEPLOY_LOG=$(tail -n 10 /path/to/deploy/log)  # Update with the actual path to your deploy log
+            DEPLOY_LOG=$(aws ssm list-command-invocations --command-id "$COMMAND_ID" --details --query 'CommandInvocations[0].CommandPlugins[0].Output' --output text)
             curl -H "Content-Type: application/json" -X POST -d '{
               "embeds": [{
                 "title": "❌ Deployment Failure",
