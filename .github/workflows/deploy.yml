@@ -102,12 +102,12 @@ jobs:
               }]
             }' $DISCORD_WEBHOOK_URL
           }
-          
+
           # Send build start notification
           send_discord_notification "🔨 Build Started" "Build process started for commit `${{ github.sha }}`." 16776960
 
-          # Run AWS SSM Command and handle response
-          RESPONSE=$(aws ssm send-command \
+          # Run AWS SSM Command
+          COMMAND_ID=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
             --targets "Key=instanceids,Values=$INSTANCE_ID" \
             --parameters "commands=[
@@ -120,20 +120,35 @@ jobs:
               \"docker run -d --name '$CONTAINER_NAME' -p 8080:80 abdulrhmanashraf98/marom-medical:$IMAGE_TAG\"
             ]" \
             --timeout-seconds 600 \
+            --region eu-north-1 \
+            --query "Command.CommandId" \
+            --output text)
+
+          echo "SSM Command ID: $COMMAND_ID"
+
+          # Wait for the command to finish
+          sleep 60  # Adjust the sleep time as needed
+
+          # Check command status
+          COMMAND_STATUS=$(aws ssm list-commands \
+            --command-id "$COMMAND_ID" \
+            --query "Commands[0].Status" \
+            --output text \
             --region eu-north-1)
-          
-          # Check if the command was successful
-          if [ $? -eq 0 ]; then
+
+          echo "Command Status: $COMMAND_STATUS"
+
+          # Handle command status
+          if [ "$COMMAND_STATUS" = "Success" ]; then
             send_discord_notification "🚀 Deployment Completed" "Deployment to EC2 instance completed successfully for commit `${{ github.sha }}`." 65280
-          else
+          elif [ "$COMMAND_STATUS" = "Failed" ]; then
             send_discord_notification "❌ Deployment Failed" "Deployment to EC2 instance failed for commit `${{ github.sha }}`. Please check the logs for more details." 16711680
             SUCCESS=false
+          else
+            send_discord_notification "⌛ Deployment In Progress" "Deployment to EC2 instance is still in progress for commit `${{ github.sha }}`. Please check the SSM console for more details." 16776960
           fi
-
-          echo "Deployment response: $RESPONSE"
 
           # Exit with failure if the deployment failed
           if [ "$SUCCESS" = false ]; then
             exit 1
           fi
-
