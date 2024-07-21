@@ -7,6 +7,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AppConfigModule } from './config/app-config/app-config.module';
 import { getDatabaseConfig } from './config/database-config/database.config';
 import { join } from 'path';
+import { TranslationController } from './common/service/translation.controller';
+import { TranslationService } from './common/service/translation.service';
 
 
 @Module({
@@ -37,7 +39,7 @@ import { join } from 'path';
     }),
 
   ],
-  controllers: [AppController],
-  providers: [AppService],
+  controllers: [AppController, TranslationController],
+  providers: [AppService, TranslationService],
 })
 export class AppModule {}
