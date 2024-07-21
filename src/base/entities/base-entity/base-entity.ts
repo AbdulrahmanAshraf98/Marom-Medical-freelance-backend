@@ -1,6 +1,6 @@
 import {
   Column,
-  CreateDateColumn,
+  CreateDateColumn, DeleteDateColumn,
   Entity,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
@@ -19,6 +19,6 @@ export class BaseEntity {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  @DeleteDateColumn()
+  @DeleteDateColumn({ nullable: true })
   deletedAt?: Date;
 }

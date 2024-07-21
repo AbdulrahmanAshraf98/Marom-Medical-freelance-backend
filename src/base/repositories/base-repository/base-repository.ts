@@ -1,4 +1,14 @@
-import { Repository,  FindManyOptions, UpdateResult, DeleteResult, FindOneOptions, In, Not } from 'typeorm';
+import {
+  Repository,
+  FindManyOptions,
+  UpdateResult,
+  DeleteResult,
+  FindOneOptions,
+  In,
+  Not,
+  FindOptionsOrder,
+  FindOptionsWhere,
+} from 'typeorm';
 import { BaseEntity } from '../../entities/base-entity/base-entity';
 import { Injectable } from '@nestjs/common';
 
@@ -18,7 +28,7 @@ export class BaseRepository<T extends BaseEntity> extends Repository<T> {
       relations,
       skip: page * limit,
       take: limit,
-      order: { [sortBy]: order },
+      order: { [sortBy]: order } as FindOptionsOrder<T>,
     });
     return { items, totalCount };
   }
@@ -32,27 +42,28 @@ export class BaseRepository<T extends BaseEntity> extends Repository<T> {
     return this.find({
       where: conditions,
       relations,
-      order: { [sortBy]: order },
+      order: { [sortBy]: order } as FindOptionsOrder<T>,
     });
   }
 
   async findOneBy(
     conditions: FindOneOptions<T>['where'],
   ): Promise<T | undefined> {
-    return this.findOne(conditions);
+    return this.findOne({ where: conditions } as FindOneOptions<T>);
   }
 
   async updateBy(
-    conditions: FindManyOptions<T>['where'],
+    conditions: FindOptionsWhere<T> | FindOptionsWhere<T>[],
     updateDto: Partial<T>,
   ): Promise<UpdateResult> {
-    return this.update(conditions, updateDto);
+    // Cast `updateDto` to match `_QueryDeepPartialEntity<T>`
+    return this.update(conditions as any, updateDto as any);
   }
 
   async deleteBy(
-    conditions: FindManyOptions<T>['where'],
+    conditions: FindOptionsWhere<T> | FindOptionsWhere<T>[],
   ): Promise<DeleteResult> {
-    return this.delete(conditions);
+    return this.delete(conditions as any);
   }
 
   async findWithIn(
@@ -65,9 +76,9 @@ export class BaseRepository<T extends BaseEntity> extends Repository<T> {
     return this.find({
       where: {
         [field]: In(values),
-      },
+      } as FindOptionsWhere<T>,
       relations,
-      order: { [sortBy]: order },
+      order: { [sortBy]: order } as FindOptionsOrder<T>,
     });
   }
 
@@ -81,11 +92,9 @@ export class BaseRepository<T extends BaseEntity> extends Repository<T> {
     return this.find({
       where: {
         [field]: Not(In(values)),
-      },
+      } as FindOptionsWhere<T>,
       relations,
-      order: { [sortBy]: order },
+      order: { [sortBy]: order } as FindOptionsOrder<T>,
     });
   }
-
-
 }

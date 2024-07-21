@@ -2,8 +2,9 @@ import { ArgumentsHost, Catch, ExceptionFilter } from '@nestjs/common';
 import { TranslationService } from '../../service/translation/translation.service';
 import { HttpArgumentsHost } from '@nestjs/common/interfaces';
 import { ApiResponse } from '../../interfaces/ApiResponse.interface';
-import { ErrorProcessor } from '../utils/error-processor';
-import { ResponseUtil } from '../../../util/response.util/response.util'; // Adjust import path accordingly
+import { ResponseUtil } from '../../../util/response.util/response.util';
+import { ExceptionUtil } from '../../../util/exception.util/exception.util'; // Adjust import path accordingly
+import { Response, Request } from 'express';
 
 @Catch()
 export class AllExceptionFilter<T> implements ExceptionFilter {
@@ -11,7 +12,7 @@ export class AllExceptionFilter<T> implements ExceptionFilter {
 
   async catch(exception: T, host: ArgumentsHost) {
     const ctx: HttpArgumentsHost = host.switchToHttp();
-    const request = ctx.getRequest<Request>();
+    const request: Request = ctx.getRequest<Request>();
     const acceptHeader = request.headers['accept'];
 
     // Check if the request expects a JSON response
@@ -19,15 +20,15 @@ export class AllExceptionFilter<T> implements ExceptionFilter {
       throw exception;
     }
 
-    const response = ctx.getResponse<Response>();
+    const response: Response = ctx.getResponse<Response>();
     const locale: string = request.headers['accept-language'] || 'en';
     const status: number = ExceptionUtil.getStatus(exception);
 
     // Process the exception to extract relevant error data
     const errorProcessorResponse: object | null =
-      ErrorProcessor.processException(exception);
+      ExceptionUtil.processException(exception);
     const messageKey: string =
-      ErrorProcessor.processExceptionMessage(exception);
+      ExceptionUtil.processExceptionMessage(exception);
     const errorMessage: string = await this.translationService.translate(
       messageKey,
       locale,
@@ -48,7 +49,7 @@ export class AllExceptionFilter<T> implements ExceptionFilter {
       status,
       translatedErrors,
     );
-    response.status(status).json(errorResponse);
+     response.status(status).json(errorResponse);
   }
 
   private async translateValidationErrors(

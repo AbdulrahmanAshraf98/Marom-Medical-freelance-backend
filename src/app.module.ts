@@ -8,7 +8,7 @@ import { AppConfigModule } from './config/app-config/app-config.module';
 import { getDatabaseConfig } from './config/database-config/database.config';
 import { join } from 'path';
 import { TranslationService } from './common/service/translation/translation.service';
-import { BaseService } from './base/services/base-service/base-service.service';
+import { BaseModuleModule } from './base/base-module/base-module.module';
 
 
 @Module({
@@ -37,9 +37,13 @@ import { BaseService } from './base/services/base-service/base-service.service';
       inject: [ConfigService], // Inject ConfigService to access config values
       imports: [ConfigModule], // Import ConfigModule to use ConfigService
     }),
+    BaseModuleModule
 
   ],
   controllers: [AppController],
-  providers: [AppService, TranslationService, BaseService],
+  providers: [
+    AppService,
+    TranslationService,
+    ],
 })
 export class AppModule {}
