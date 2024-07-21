@@ -4,13 +4,12 @@ import {
   Injectable,
   NestInterceptor,
 } from '@nestjs/common';
-import { Observable, of } from 'rxjs';
+import { Observable } from 'rxjs';
 import { mergeMap } from 'rxjs/operators';
-import { ApiResponse } from '../interfaces/ApiResponse.interface';
+import { ApiResponse } from '../../interfaces/ApiResponse.interface';
 import { Reflector } from '@nestjs/core';
-import { I18nService } from 'nestjs-i18n';
-import { MESSAGE_KEY } from '../decorators/response-message.decorator';
-import { TranslationService } from '../service/translation.service';
+import { TranslationService } from '../../service/translation/translation.service';
+import { MESSAGE_KEY } from '../../decorators/response-message/response-message.decorator';
 
 @Injectable()
 export class ResponseInterceptor implements NestInterceptor {
@@ -30,7 +29,7 @@ export class ResponseInterceptor implements NestInterceptor {
       mergeMap(async (data): Promise<any> => {
         const message: string = await this.translationService.translate(
           messageKey,
-          locale
+          locale,
         );
 
         if (typeof data === 'object' && data !== null) {

@@ -1,9 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { of } from 'rxjs';
 import { Reflector } from '@nestjs/core';
-import { ResponseInterceptor } from './response.interceptor';
 import { CallHandler, ExecutionContext } from '@nestjs/common';
-import { TranslationService } from '../service/translation.service';
+import { TranslationService } from '../../service/translation/translation.service';
+import { ResponseInterceptor } from './response.interceptor';
 
 describe('ResponseInterceptor', () => {
   let interceptor: ResponseInterceptor;
@@ -60,12 +60,23 @@ describe('ResponseInterceptor', () => {
     };
   });
 
-  const testInterceptor = async (data: any, expectedResult: any, locale: string, translation: string) => {
+  const testInterceptor = async (
+    data: any,
+    expectedResult: any,
+    locale: string,
+    translation: string,
+  ) => {
     setupMocks(locale, translation);
     next.handle = jest.fn().mockReturnValue(of(data));
     const result = await interceptor.intercept(context, next).toPromise();
-    expect(reflector.get).toHaveBeenCalledWith('response_message', context.getHandler());
-    expect(translationService.translate).toHaveBeenCalledWith('messages.success_fetch', locale);
+    expect(reflector.get).toHaveBeenCalledWith(
+      'response_message',
+      context.getHandler(),
+    );
+    expect(translationService.translate).toHaveBeenCalledWith(
+      'messages.success_fetch',
+      locale,
+    );
     expect(result).toEqual(expectedResult);
   };
 
@@ -82,7 +93,7 @@ describe('ResponseInterceptor', () => {
         data: { data: 'test' },
       },
       'en',
-      'translated_message'
+      'translated_message',
     );
   });
 
@@ -96,7 +107,7 @@ describe('ResponseInterceptor', () => {
         data: { data: 'test' },
       },
       'en',
-      'translated_message'
+      'translated_message',
     );
   });
 
@@ -109,7 +120,7 @@ describe('ResponseInterceptor', () => {
         data: { name: 'John', age: 30 },
       },
       'en',
-      'translated_message'
+      'translated_message',
     );
   });
 
@@ -118,7 +129,7 @@ describe('ResponseInterceptor', () => {
       'simple string response',
       'simple string response',
       'en',
-      'translated_message'
+      'translated_message',
     );
   });
 
@@ -131,7 +142,7 @@ describe('ResponseInterceptor', () => {
         data: { data: 'test' },
       },
       'ar',
-      'رسالة مترجمة'
+      'رسالة مترجمة',
     );
   });
 
@@ -151,7 +162,7 @@ describe('ResponseInterceptor', () => {
           data: { data: 'test' },
         },
         lang,
-        messages[lang]
+        messages[lang],
       );
     }
   });
