@@ -2,9 +2,10 @@ import { NestFactory, Reflector } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { ResponseInterceptor } from './common/interceptor/response.interceptor';
-import { I18nService } from 'nestjs-i18n';
+import { DocumentBuilder, OpenAPIObject, SwaggerModule } from '@nestjs/swagger';
+import { ResponseInterceptor } from './common/interceptor/response/response.interceptor';
+import { TranslationService } from './common/service/translation/translation.service';
+import { AllExceptionFilter } from './common/filter/all-exception/all-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -15,12 +16,20 @@ async function bootstrap() {
     .setDescription('The Marom Medical API description')
     .setVersion('1.0')
     .build();
-  const document = SwaggerModule.createDocument(app, config);
-  const i18nService: I18nService = app.get(I18nService);
+  const document: OpenAPIObject = SwaggerModule.createDocument(app, config);
+  const translationService: TranslationService = app.get(TranslationService);
   const reflector: Reflector = app.get(Reflector);
 
-  app.useGlobalPipes(new ValidationPipe());
-  app.useGlobalInterceptors(new ResponseInterceptor(i18nService, reflector));
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transform: true, // Automatically transforms payloads into DTO instances
+      whitelist: true, // Strips properties that do not have decorators
+    }),
+  );
+  app.useGlobalInterceptors(
+    new ResponseInterceptor(translationService, reflector),
+  );
+  app.useGlobalFilters(new AllExceptionFilter(translationService));
   SwaggerModule.setup('api', app, document);
   await app.listen(port);
 }
