@@ -1,0 +1,18 @@
+{
+  "messages": {
+    "success_fetch": "Data fetched successfully.",
+    "success_create": "Data created successfully.",
+    "success_update": "Data updated successfully.",
+    "success_delete": "Data deleted successfully.",
+    "failed_fetch": "Failed to fetch data. Please try again later.",
+    "failed_create": "Failed to create data. Please try again later.",
+    "failed_update": "Failed to update data. Please try again later.",
+    "failed_delete": "Failed to delete data. Please try again later.",
+    "entity_not_found": "The requested item could not be found.",
+    "create_failed": "There was an issue creating the item. Please try again.",
+    "update_failed": "There was an issue updating the item. Please try again.",
+    "delete_failed": "There was an issue deleting the item. Please try again.",
+    "update_by_failed": "There was an issue updating items based on the conditions.",
+    "delete_by_failed": "There was an issue deleting items based on the conditions."
+  }
+}
