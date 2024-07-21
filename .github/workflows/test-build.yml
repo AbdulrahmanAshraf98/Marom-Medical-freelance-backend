@@ -53,7 +53,7 @@ jobs:
       - name: Notify Discord of test result
         if: always()
         run: |
-          if [ ${{ steps.test.outcome }} == 'failure' ]; then
+          if [ "${{ steps.test.outcome }}" == 'failure' ]; then
             TEST_LOG=$(tail -n 10 /path/to/test/log)  # Update with the actual path to your test log
             curl -H "Content-Type: application/json" -X POST -d '{
               "embeds": [{
@@ -152,12 +152,12 @@ jobs:
             DB_PASSWORD=${{ secrets.DB_PASSWORD }}
             DB_DATABASE=${{ secrets.DB_DATABASE }}
             DB_TYPE=${{ secrets.DB_TYPE }}
-            
+
 
       - name: Notify Discord of build result
         if: always()
         run: |
-          if [ ${{ steps.build.outcome }} == 'success' ]; then
+          if [ "${{ steps.build.outcome }}" == 'success' ]; then
             curl -H "Content-Type: application/json" -X POST -d '{
               "embeds": [{
                 "title": "✅ Build Success",
