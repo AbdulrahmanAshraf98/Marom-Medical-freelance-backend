@@ -143,6 +143,7 @@ jobs:
       - name: Deploy to EC2
         run: |
           INSTANCE_ID="${{ secrets.INSTANCE_ID }}"
+          CONTAINER_NAME="${{ secrets.DOCKER_CONTAINER_NAME }}"
           IMAGE_TAG="${{ github.sha }}"
           DISCORD_WEBHOOK_URL="${{ secrets.DISCORD_WEBHOOK_URL }}"
           SUCCESS=true
@@ -182,7 +183,9 @@ jobs:
               \"docker images -q | grep 'abdulrhmanashraf98/marom-medical' | xargs -r docker rmi -f\",
               \"docker images -f 'dangling=true' -q | xargs -r docker rmi -f\",
               \"docker system prune -af\",
-              \"docker run -d --name '$CONTAINER_NAME' -p 8080:80 abdulrhmanashraf98/marom-medical:$IMAGE_TAG\"
+              \"docker run -d --name '$CONTAINER_NAME' -p 8080:80 abdulrhmanashraf98/marom-medical:$IMAGE_TAG\",
+              \"sleep 30\",
+              \"docker inspect -f '{{.State.Status}}' $CONTAINER_NAME\"
             ]" \
             --timeout-seconds 1200 \
             --region eu-north-1 \
@@ -209,8 +212,23 @@ jobs:
             echo "Attempt $ATTEMPT: Command Status: $COMMAND_STATUS"
 
             if [ "$COMMAND_STATUS" = "Success" ]; then
-              send_discord_notification "🚀 Deployment Completed" "Deployment to EC2 instance completed successfully for commit ${IMAGE_TAG}." 65280
-              break
+              CONTAINER_STATUS=$(aws ssm list-command-invocations \
+                --command-id "$COMMAND_ID" \
+                --details \
+                --query "CommandInvocations[0].CommandPlugins[0].Output" \
+                --output text \
+                --region eu-north-1)
+
+              echo "Container Status: $CONTAINER_STATUS"
+
+              if echo "$CONTAINER_STATUS" | grep -q "running"; then
+                send_discord_notification "🚀 Deployment Completed" "Deployment to EC2 instance completed successfully for commit ${IMAGE_TAG}." 65280
+                break
+              elif echo "$CONTAINER_STATUS" | grep -q "exited"; then
+                send_discord_notification "❌ Container Exited" "Deployment to EC2 instance failed: container exited for commit ${IMAGE_TAG}. Please check the logs for more details." 16711680
+                SUCCESS=false
+                break
+              fi
             elif [ "$COMMAND_STATUS" = "Failed" ]; then
               send_discord_notification "❌ Deployment Failed" "Deployment to EC2 instance failed for commit ${IMAGE_TAG}. Please check the logs for more details." 16711680
               SUCCESS=false
