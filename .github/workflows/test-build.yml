@@ -47,15 +47,14 @@ jobs:
 
       - name: Run tests
         id: test
-        run: |
-          npm test | tee test.log
+        run: npm test
         continue-on-error: true
 
       - name: Notify Discord of test result
         if: always()
         run: |
-          TEST_LOG=$(tail -n 10 test.log)
           if [ "${{ steps.test.outcome }}" == 'failure' ]; then
+            TEST_LOG=$(tail -n 10 /path/to/test/log || echo "No test log available.")
             curl -H "Content-Type: application/json" -X POST -d '{
               "embeds": [{
                 "title": "❌ Test Failure",
@@ -139,7 +138,7 @@ jobs:
       - name: Build Docker image
         id: build
         run: |
-          docker build . \
+          docker buildx build \
             --build-arg APP_PORT=${{ secrets.APP_PORT }} \
             --build-arg DB_HOST=${{ secrets.DB_HOST }} \
             --build-arg DB_PORT=${{ secrets.DB_PORT }} \
@@ -150,18 +149,12 @@ jobs:
             --build-arg DB_DATABASE_SYNCHRONIZE=${{ secrets.DB_DATABASE_SYNCHRONIZE }} \
             -t abdulrhmanashraf98/marom-medical:${{ github.sha }} \
             -t abdulrhmanashraf98/marom-medical:latest \
+            --push \
             . > build.log 2>&1 || (echo "Docker build failed" && cat build.log && exit 1)
-
-      - name: Display build log
-        if: failure()
-        run: |
-          echo "Build log:"
-          cat build.log
 
       - name: Notify Discord of build result
         if: always()
         run: |
-          BUILD_LOG=$(tail -n 10 build.log || echo "No build log available")
           if [ "${{ steps.build.outcome }}" == 'success' ]; then
             curl -H "Content-Type: application/json" -X POST -d '{
               "embeds": [{
@@ -184,6 +177,7 @@ jobs:
               }]
             }' ${{ secrets.DISCORD_WEBHOOK_URL }}
           else
+            BUILD_LOG=$(tail -n 10 build.log || echo "No build log available.")
             curl -H "Content-Type: application/json" -X POST -d '{
               "embeds": [{
                 "title": "❌ Build Failure",
