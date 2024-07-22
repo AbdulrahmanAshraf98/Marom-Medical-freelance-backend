@@ -18,7 +18,7 @@ import { BaseModuleModule } from './base/base-module/base-module.module';
       useFactory: (configService: ConfigService) => ({
         fallbackLanguage: configService.get<string>('FALLBACK_LANGUAGE', 'en'),
         loaderOptions: {
-          path: join(__dirname, '/i18n/'),
+          path: join(__dirname, '../i18n'), // Adjusted path to point to the correct directory
           watch: true,
 
         },
