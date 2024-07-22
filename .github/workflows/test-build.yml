@@ -54,7 +54,7 @@ jobs:
         if: always()
         run: |
           if [ "${{ steps.test.outcome }}" == 'failure' ]; then
-            TEST_LOG=$(tail -n 10 /path/to/test/log)  # Update with the actual path to your test log
+            TEST_LOG=$(tail -n 10 /path/to/test/log || echo "No test log available.")
             curl -H "Content-Type: application/json" -X POST -d '{
               "embeds": [{
                 "title": "❌ Test Failure",
@@ -137,22 +137,20 @@ jobs:
 
       - name: Build Docker image
         id: build
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          push: true
-          tags: |
-            abdulrhmanashraf98/marom-medical:${{ github.sha }}
-            abdulrhmanashraf98/marom-medical:latest
-          build-args: |
-            APP_PORT=${{ secrets.APP_PORT }}
-            DB_HOST=${{ secrets.DB_HOST }}
-            DB_PORT=${{ secrets.DB_PORT }}
-            DB_USERNAME=${{ secrets.DB_USERNAME }}
-            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-            DB_DATABASE=${{ secrets.DB_DATABASE }}
-            DB_TYPE=${{ secrets.DB_TYPE }}
-            DB_DATABASE_SYNCHRONIZE=${secrets.DB_DATABASE_SYNCHRONIZE}
+        run: |
+          docker buildx build \
+            --build-arg APP_PORT=${{ secrets.APP_PORT }} \
+            --build-arg DB_HOST=${{ secrets.DB_HOST }} \
+            --build-arg DB_PORT=${{ secrets.DB_PORT }} \
+            --build-arg DB_USERNAME=${{ secrets.DB_USERNAME }} \
+            --build-arg DB_PASSWORD=${{ secrets.DB_PASSWORD }} \
+            --build-arg DB_DATABASE=${{ secrets.DB_DATABASE }} \
+            --build-arg DB_TYPE=${{ secrets.DB_TYPE }} \
+            --build-arg DB_DATABASE_SYNCHRONIZE=${{ secrets.DB_DATABASE_SYNCHRONIZE }} \
+            -t abdulrhmanashraf98/marom-medical:${{ github.sha }} \
+            -t abdulrhmanashraf98/marom-medical:latest \
+            --push \
+            . > build.log 2>&1 || (echo "Docker build failed" && cat build.log && exit 1)
 
       - name: Notify Discord of build result
         if: always()
@@ -179,7 +177,7 @@ jobs:
               }]
             }' ${{ secrets.DISCORD_WEBHOOK_URL }}
           else
-            BUILD_LOG=$(tail -n 10 /path/to/build/log)  # Update with the actual path to your build log
+            BUILD_LOG=$(tail -n 10 build.log || echo "No build log available.")
             curl -H "Content-Type: application/json" -X POST -d '{
               "embeds": [{
                 "title": "❌ Build Failure",
