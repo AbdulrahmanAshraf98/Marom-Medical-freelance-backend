@@ -44,4 +44,4 @@ ENV DB_DATABASE_SYNCHRONIZE=${DB_DATABASE_SYNCHRONIZE}
 EXPOSE ${APP_PORT}
 
 # Start the application
-CMD ["node", "dist/main.js"]
+CMD ["node", "dist/src/main.js"]
