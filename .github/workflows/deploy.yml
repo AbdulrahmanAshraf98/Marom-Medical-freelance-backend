@@ -79,7 +79,7 @@ jobs:
           IMAGE_TAG="${{ github.sha }}"
           DISCORD_WEBHOOK_URL="${{ secrets.DISCORD_WEBHOOK_URL }}"
           SUCCESS=true
-          
+
           # Function to send a Discord notification
           send_discord_notification() {
             local title="$1"
@@ -93,7 +93,7 @@ jobs:
                 "fields": [
                   {
                     "name": "Commit SHA",
-                    "value": "'"${{ github.sha }}"'",
+                    "value": "'"${IMAGE_TAG}"'",
                     "inline": true
                   }
                 ],
@@ -105,7 +105,7 @@ jobs:
           }
 
           # Send build start notification
-          send_discord_notification "🔨 Build Started" "Build process started for commit `${{ github.sha }}`." 16776960
+          send_discord_notification "🔨 Build Started" "Build process started for commit ${IMAGE_TAG}." 16776960
 
           # Run AWS SSM Command
           COMMAND_ID=$(aws ssm send-command \
@@ -153,18 +153,18 @@ jobs:
 
           # Handle command status and container status
           if [ "$COMMAND_STATUS" = "Success" ] && [ "$CONTAINER_STATUS" = "running" ]; then
-            send_discord_notification "🚀 Deployment Completed" "Deployment to EC2 instance completed successfully for commit `${{ github.sha }}`." 65280
+            send_discord_notification "🚀 Deployment Completed" "Deployment to EC2 instance completed successfully for commit ${IMAGE_TAG}." 65280
           elif [ "$CONTAINER_STATUS" = "exited" ]; then
-            send_discord_notification "❌ Container Exited" "Deployment to EC2 instance failed: container exited for commit `${{ github.sha }}`. Please check the logs for more details." 16711680
+            send_discord_notification "❌ Container Exited" "Deployment to EC2 instance failed: container exited for commit ${IMAGE_TAG}. Please check the logs for more details." 16711680
             SUCCESS=false
           elif [ "$CONTAINER_STATUS" = "not running" ]; then
-            send_discord_notification "❌ Container Not Running" "Deployment to EC2 instance failed: container is not running for commit `${{ github.sha }}`. Please check the logs for more details." 16711680
+            send_discord_notification "❌ Container Not Running" "Deployment to EC2 instance failed: container is not running for commit ${IMAGE_TAG}. Please check the logs for more details." 16711680
             SUCCESS=false
           elif [ "$COMMAND_STATUS" = "Failed" ]; then
-            send_discord_notification "❌ Deployment Failed" "Deployment to EC2 instance failed for commit `${{ github.sha }}`. Please check the logs for more details." 16711680
+            send_discord_notification "❌ Deployment Failed" "Deployment to EC2 instance failed for commit ${IMAGE_TAG}. Please check the logs for more details." 16711680
             SUCCESS=false
           else
-            send_discord_notification "⌛ Deployment In Progress" "Deployment to EC2 instance is still in progress for commit `${{ github.sha }}`. Please check the SSM console for more details." 16776960
+            send_discord_notification "⌛ Deployment In Progress" "Deployment to EC2 instance is still in progress for commit ${IMAGE_TAG}. Please check the SSM console for more details." 16776960
           fi
 
           # Exit with failure if the deployment failed
