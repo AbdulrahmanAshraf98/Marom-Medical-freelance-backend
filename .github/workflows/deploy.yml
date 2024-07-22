@@ -36,7 +36,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '14' # Adjust according to your needs
+          node-version: '14'
 
       - name: Install dependencies
         run: npm install
@@ -185,9 +185,9 @@ jobs:
               \"docker system prune -af\",
               \"docker run -d --name '$CONTAINER_NAME' -p 8080:80 abdulrhmanashraf98/marom-medical:$IMAGE_TAG\",
               \"sleep 30\",
-              \"if [ \$(docker inspect -f '{{.State.Running}}' $CONTAINER_NAME) = 'true' ]; then echo 'running'; elif [ \$(docker inspect -f '{{.State.ExitCode}}' $CONTAINER_NAME) -ne 0 ]; then echo 'exited'; else echo 'not running'; fi\"
+              \"docker inspect -f '{{.State.Status}}' $CONTAINER_NAME\"
             ]" \
-            --timeout-seconds 600 \
+            --timeout-seconds 1200 \
             --region eu-north-1 \
             --query "Command.CommandId" \
             --output text)
@@ -195,44 +195,53 @@ jobs:
           echo "SSM Command ID: $COMMAND_ID"
 
           # Wait for the command to finish
+          echo "Waiting for command to complete..."
           sleep 60  # Adjust the sleep time as needed
 
-          # Check command status
-          COMMAND_STATUS=$(aws ssm list-commands \
-            --command-id "$COMMAND_ID" \
-            --query "Commands[0].Status" \
-            --output text \
-            --region eu-north-1)
+          # Poll for command status
+          POLL_INTERVAL=30
+          MAX_ATTEMPTS=10
+          ATTEMPT=1
+          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+            COMMAND_STATUS=$(aws ssm list-commands \
+              --command-id "$COMMAND_ID" \
+              --query "Commands[0].Status" \
+              --output text \
+              --region eu-north-1)
 
-          echo "Command Status: $COMMAND_STATUS"
+            echo "Attempt $ATTEMPT: Command Status: $COMMAND_STATUS"
 
-          # Get the last command invocation result to check if the container is running
-          CONTAINER_STATUS=$(aws ssm list-command-invocations \
-            --command-id "$COMMAND_ID" \
-            --details \
-            --query "CommandInvocations[0].CommandPlugins[0].Output" \
-            --output text \
-            --region eu-north-1)
+            if [ "$COMMAND_STATUS" = "Success" ]; then
+              CONTAINER_STATUS=$(aws ssm list-command-invocations \
+                --command-id "$COMMAND_ID" \
+                --details \
+                --query "CommandInvocations[0].CommandPlugins[0].Output" \
+                --output text \
+                --region eu-north-1)
 
-          echo "Container Status: $CONTAINER_STATUS"
+              echo "Container Status: $CONTAINER_STATUS"
 
-          # Handle command status and container status
-          if [ "$COMMAND_STATUS" = "Success" ] && [ "$CONTAINER_STATUS" = "running" ]; then
-            send_discord_notification "🚀 Deployment Completed" "Deployment to EC2 instance completed successfully for commit ${IMAGE_TAG}." 65280
-          elif [ "$CONTAINER_STATUS" = "exited" ]; then
-            send_discord_notification "❌ Container Exited" "Deployment to EC2 instance failed: container exited for commit ${IMAGE_TAG}. Please check the logs for more details." 16711680
-            SUCCESS=false
-          elif [ "$CONTAINER_STATUS" = "not running" ]; then
-            send_discord_notification "❌ Container Not Running" "Deployment to EC2 instance failed: container is not running for commit ${IMAGE_TAG}. Please check the logs for more details." 16711680
-            SUCCESS=false
-          elif [ "$COMMAND_STATUS" = "Failed" ]; then
-            send_discord_notification "❌ Deployment Failed" "Deployment to EC2 instance failed for commit ${IMAGE_TAG}. Please check the logs for more details." 16711680
-            SUCCESS=false
+              if echo "$CONTAINER_STATUS" | grep -q "running"; then
+                send_discord_notification "🚀 Deployment Completed" "Deployment to EC2 instance completed successfully for commit ${IMAGE_TAG}." 65280
+                break
+              elif echo "$CONTAINER_STATUS" | grep -q "exited"; then
+                send_discord_notification "❌ Container Exited" "Deployment to EC2 instance failed: container exited for commit ${IMAGE_TAG}. Please check the logs for more details." 16711680
+                SUCCESS=false
+                break
+              fi
+            elif [ "$COMMAND_STATUS" = "Failed" ]; then
+              send_discord_notification "❌ Deployment Failed" "Deployment to EC2 instance failed for commit ${IMAGE_TAG}. Please check the logs for more details." 16711680
+              SUCCESS=false
+              break
+            fi
+
+            sleep $POLL_INTERVAL
+            ATTEMPT=$((ATTEMPT + 1))
+          done
+
+          if [ "$SUCCESS" = true ]; then
+            echo "Deployment successful."
           else
-            send_discord_notification "⌛ Deployment In Progress" "Deployment to EC2 instance is still in progress for commit ${IMAGE_TAG}. Please check the SSM console for more details." 16776960
-          fi
-
-          # Exit with failure if the deployment failed
-          if [ "$SUCCESS" = false ]; then
+            echo "Deployment failed."
             exit 1
           fi
