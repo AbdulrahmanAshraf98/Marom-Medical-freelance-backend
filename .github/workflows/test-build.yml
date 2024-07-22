@@ -150,12 +150,18 @@ jobs:
             --build-arg DB_DATABASE_SYNCHRONIZE=${{ secrets.DB_DATABASE_SYNCHRONIZE }} \
             -t abdulrhmanashraf98/marom-medical:${{ github.sha }} \
             -t abdulrhmanashraf98/marom-medical:latest \
-            . > build.log 2>&1
+            . > build.log 2>&1 || (echo "Docker build failed" && cat build.log && exit 1)
+
+      - name: Display build log
+        if: failure()
+        run: |
+          echo "Build log:"
+          cat build.log
 
       - name: Notify Discord of build result
         if: always()
         run: |
-          BUILD_LOG=$(tail -n 10 build.log)
+          BUILD_LOG=$(tail -n 10 build.log || echo "No build log available")
           if [ "${{ steps.build.outcome }}" == 'success' ]; then
             curl -H "Content-Type: application/json" -X POST -d '{
               "embeds": [{
