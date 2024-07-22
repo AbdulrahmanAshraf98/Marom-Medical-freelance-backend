@@ -118,7 +118,9 @@ jobs:
               \"docker images -q | grep 'abdulrhmanashraf98/marom-medical' | xargs -r docker rmi -f\",
               \"docker images -f 'dangling=true' -q | xargs -r docker rmi -f\",
               \"docker system prune -af\",
-              \"docker run -d --name '$CONTAINER_NAME' -p 8080:80 abdulrhmanashraf98/marom-medical:$IMAGE_TAG\"
+              \"docker run -d --name '$CONTAINER_NAME' -p 8080:80 abdulrhmanashraf98/marom-medical:$IMAGE_TAG\",
+              \"sleep 30\",
+              \"if [ \$(docker inspect -f '{{.State.Running}}' $CONTAINER_NAME) = 'true' ]; then echo 'running'; elif [ \$(docker inspect -f '{{.State.ExitCode}}' $CONTAINER_NAME) -ne 0 ]; then echo 'exited'; else echo 'not running'; fi\"
             ]" \
             --timeout-seconds 600 \
             --region eu-north-1 \
@@ -139,9 +141,25 @@ jobs:
 
           echo "Command Status: $COMMAND_STATUS"
 
-          # Handle command status
-          if [ "$COMMAND_STATUS" = "Success" ]; then
+          # Get the last command invocation result to check if the container is running
+          CONTAINER_STATUS=$(aws ssm list-command-invocations \
+            --command-id "$COMMAND_ID" \
+            --details \
+            --query "CommandInvocations[0].CommandPlugins[0].Output" \
+            --output text \
+            --region eu-north-1)
+
+          echo "Container Status: $CONTAINER_STATUS"
+
+          # Handle command status and container status
+          if [ "$COMMAND_STATUS" = "Success" ] && [ "$CONTAINER_STATUS" = "running" ]; then
             send_discord_notification "🚀 Deployment Completed" "Deployment to EC2 instance completed successfully for commit `${{ github.sha }}`." 65280
+          elif [ "$CONTAINER_STATUS" = "exited" ]; then
+            send_discord_notification "❌ Container Exited" "Deployment to EC2 instance failed: container exited for commit `${{ github.sha }}`. Please check the logs for more details." 16711680
+            SUCCESS=false
+          elif [ "$CONTAINER_STATUS" = "not running" ]; then
+            send_discord_notification "❌ Container Not Running" "Deployment to EC2 instance failed: container is not running for commit `${{ github.sha }}`. Please check the logs for more details." 16711680
+            SUCCESS=false
           elif [ "$COMMAND_STATUS" = "Failed" ]; then
             send_discord_notification "❌ Deployment Failed" "Deployment to EC2 instance failed for commit `${{ github.sha }}`. Please check the logs for more details." 16711680
             SUCCESS=false
