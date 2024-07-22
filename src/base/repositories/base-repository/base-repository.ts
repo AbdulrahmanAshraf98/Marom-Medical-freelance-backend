@@ -14,14 +14,17 @@ import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class BaseRepository<T extends BaseEntity> extends Repository<T> {
-
+  private readonly DEFAULT_PAGE = 0;
+  private readonly DEFAULT_LIMIT = 20;
+  private readonly DEFAULT_SORT_BY = 'id';
+  private readonly DEFAULT_ORDER: 'ASC' | 'DESC' = 'DESC';
   async findAllWithPagination(
     conditions: FindManyOptions<T>['where'] = {},
     relations: string[] = [],
-    page: number = 0,
-    limit: number = 20,
-    sortBy: string = 'createdAt',
-    order: 'ASC' | 'DESC' = 'DESC',
+    page: number = this.DEFAULT_PAGE,
+    limit: number = this.DEFAULT_LIMIT,
+    sortBy: string = this.DEFAULT_SORT_BY,
+    order: 'ASC' | 'DESC' = this.DEFAULT_ORDER,
   ): Promise<{ items: T[]; totalCount: number }> {
     const [items, totalCount] = await this.findAndCount({
       where: conditions,
@@ -36,8 +39,8 @@ export class BaseRepository<T extends BaseEntity> extends Repository<T> {
   async findAllWithoutPagination(
     conditions: FindManyOptions<T>['where'] = {},
     relations: string[] = [],
-    sortBy: string = 'createdAt',
-    order: 'ASC' | 'DESC' = 'DESC',
+    sortBy: string = this.DEFAULT_SORT_BY,
+    order: 'ASC' | 'DESC' = this.DEFAULT_ORDER,
   ): Promise<T[]> {
     return this.find({
       where: conditions,
@@ -48,16 +51,23 @@ export class BaseRepository<T extends BaseEntity> extends Repository<T> {
 
   async findOneBy(
     conditions: FindOneOptions<T>['where'],
-  ): Promise<T | undefined> {
+  ): Promise<T | null> {
     return this.findOne({ where: conditions } as FindOneOptions<T>);
   }
-
   async updateBy(
     conditions: FindOptionsWhere<T> | FindOptionsWhere<T>[],
     updateDto: Partial<T>,
-  ): Promise<UpdateResult> {
-    // Cast `updateDto` to match `_QueryDeepPartialEntity<T>`
-    return this.update(conditions as any, updateDto as any);
+  ): Promise<{ updatedEntities: T[]; updateResult: UpdateResult }> {
+    // Perform the update operation
+    const updateResult: UpdateResult = await this.update(
+      conditions as any,
+      updateDto as any,
+    );
+    const findOptions: FindManyOptions<T> = {
+      where: conditions,
+    };
+    const updatedEntities:(T)[] = await this.find(findOptions);
+    return { updatedEntities, updateResult };
   }
 
   async deleteBy(
@@ -66,35 +76,57 @@ export class BaseRepository<T extends BaseEntity> extends Repository<T> {
     return this.delete(conditions as any);
   }
 
+  private async findWithCondition(
+    field: keyof T,
+    condition: 'in' | 'notIn',
+    values: any[],
+    relations: string[] = [],
+    sortBy: string = this.DEFAULT_SORT_BY,
+    order: 'ASC' | 'DESC' = this.DEFAULT_ORDER,
+  ): Promise<T[]> {
+    const whereCondition =
+      condition === 'in'
+        ? { [field]: In(values) }
+        : { [field]: Not(In(values)) };
+
+    return this.find({
+      where: whereCondition as FindOptionsWhere<T>,
+      relations,
+      order: { [sortBy]: order } as FindOptionsOrder<T>,
+    });
+  }
+
   async findWithIn(
     field: keyof T,
     values: any[],
     relations: string[] = [],
-    sortBy: string = 'createdAt',
-    order: 'ASC' | 'DESC' = 'DESC',
+    sortBy: string = this.DEFAULT_SORT_BY,
+    order: 'ASC' | 'DESC' = this.DEFAULT_ORDER,
   ): Promise<T[]> {
-    return this.find({
-      where: {
-        [field]: In(values),
-      } as FindOptionsWhere<T>,
+    return this.findWithCondition(
+      field,
+      'in',
+      values,
       relations,
-      order: { [sortBy]: order } as FindOptionsOrder<T>,
-    });
+      sortBy,
+      order,
+    );
   }
 
   async findWithNotIn(
     field: keyof T,
     values: any[],
     relations: string[] = [],
-    sortBy: string = 'createdAt',
-    order: 'ASC' | 'DESC' = 'DESC',
+    sortBy: string = this.DEFAULT_SORT_BY,
+    order: 'ASC' | 'DESC' = this.DEFAULT_ORDER,
   ): Promise<T[]> {
-    return this.find({
-      where: {
-        [field]: Not(In(values)),
-      } as FindOptionsWhere<T>,
+    return this.findWithCondition(
+      field,
+      'notIn',
+      values,
       relations,
-      order: { [sortBy]: order } as FindOptionsOrder<T>,
-    });
+      sortBy,
+      order,
+    );
   }
 }

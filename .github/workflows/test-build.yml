@@ -152,7 +152,7 @@ jobs:
             DB_PASSWORD=${{ secrets.DB_PASSWORD }}
             DB_DATABASE=${{ secrets.DB_DATABASE }}
             DB_TYPE=${{ secrets.DB_TYPE }}
-
+            DB_DATABASE_SYNCHRONIZE=${secrets.DB_DATABASE_SYNCHRONIZE}
 
       - name: Notify Discord of build result
         if: always()
