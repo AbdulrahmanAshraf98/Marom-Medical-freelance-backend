@@ -1,4 +1,4 @@
-name: Deploy Docker to EC2
+name: Deploy to EC2
 
 on:
   push:
@@ -8,69 +8,222 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
       - name: Cache Docker layers
         uses: actions/cache@v3
         with:
-          path: /tmp/.buildx-cache
+          path: |
+            ~/.cache/docker
+            ~/.docker
           key: ${{ runner.os }}-docker-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-docker-
 
-      - name: Build Docker image
-        run: docker build -t my-image:${{ github.sha }} .
+      - name: Cache Node.js modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.npm
+            !~/.npm/**/.cache
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
 
-      - name: Push Docker image
-        run: docker push my-image:${{ github.sha }}
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '14'
 
-      - name: Run Deployment Script
-        env:
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-          INSTANCE_ID: ${{ secrets.INSTANCE_ID }}
-          SSM_DOCUMENT_NAME: ${{ secrets.SSM_DOCUMENT_NAME }}
-          IMAGE_TAG: ${{ github.sha }}
+      - name: Install dependencies
+        run: npm install
+
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-north-1
+
+      - name: Set deployment variables
+        run: echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_ENV
+
+      - name: Log in to Docker Hub
         run: |
-          aws ssm send-command \
-            --region $AWS_REGION \
-            --document-name $SSM_DOCUMENT_NAME \
-            --targets "Key=instanceids,Values=$INSTANCE_ID" \
-            --parameters 'commands=["docker pull my-image:${IMAGE_TAG}", "docker run -d my-image:${IMAGE_TAG}"]'
+          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
-      - name: Wait for Deployment Completion
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: |
+            abdulrhmanashraf98/marom-medical:${{ github.sha }}
+            abdulrhmanashraf98/marom-medical:latest
+          build-args: |
+            APP_PORT=${{ secrets.APP_PORT }}
+            DB_HOST=${{ secrets.DB_HOST }}
+            DB_PORT=${{ secrets.DB_PORT }}
+            DB_USERNAME=${{ secrets.DB_USERNAME }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            DB_DATABASE=${{ secrets.DB_DATABASE }}
+            DB_TYPE=${{ secrets.DB_TYPE }}
+            DB_DATABASE_SYNCHRONIZE=${{ secrets.DB_DATABASE_SYNCHRONIZE }}
+
+      - name: Notify Discord of Docker build start
         run: |
+          curl -H "Content-Type: application/json" -X POST -d '{
+            "embeds": [{
+              "title": "🔨 Docker Build Started",
+              "description": "Docker build process started for commit `${{ github.sha }}`.",
+              "color": 16776960,
+              "thumbnail": {
+                "url": "https://example.com/start-image.png"
+              },
+              "fields": [
+                {
+                  "name": "Commit SHA",
+                  "value": "${{ github.sha }}",
+                  "inline": true
+                }
+              ],
+              "footer": {
+                "text": "GitHub Actions CI/CD"
+              }
+            }]
+          }' ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+      - name: Notify Discord of Docker build completion
+        run: |
+          curl -H "Content-Type: application/json" -X POST -d '{
+            "embeds": [{
+              "title": "✅ Docker Build Completed",
+              "description": "Docker build process completed successfully for commit `${{ github.sha }}`.",
+              "color": 65280,
+              "fields": [
+                {
+                  "name": "Commit SHA",
+                  "value": "${{ github.sha }}",
+                  "inline": true
+                }
+              ],
+              "footer": {
+                "text": "GitHub Actions CI/CD"
+              }
+            }]
+          }' ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+      - name: Notify Discord of deployment start
+        run: |
+          curl -H "Content-Type: application/json" -X POST -d '{
+            "embeds": [{
+              "title": "🚀 Deployment Started",
+              "description": "Deployment process to EC2 started for commit `${{ github.sha }}`.",
+              "color": 16776960,
+              "fields": [
+                {
+                  "name": "Commit SHA",
+                  "value": "${{ github.sha }}",
+                  "inline": true
+                }
+              ],
+              "footer": {
+                "text": "GitHub Actions CI/CD"
+              }
+            }]
+          }' ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+      - name: Deploy to EC2
+        run: |
+          INSTANCE_ID="${{ secrets.INSTANCE_ID }}"
+          IMAGE_TAG="${{ github.sha }}"
+          DISCORD_WEBHOOK_URL="${{ secrets.DISCORD_WEBHOOK_URL }}"
+          SUCCESS=true
+
+          # Function to send a Discord notification
+          send_discord_notification() {
+            local title="$1"
+            local description="$2"
+            local color="$3"
+            curl -H "Content-Type: application/json" -X POST -d '{
+              "embeds": [{
+                "title": "'"$title"'",
+                "description": "'"$description"'",
+                "color": '"$color"',
+                "fields": [
+                  {
+                    "name": "Commit SHA",
+                    "value": "'"${IMAGE_TAG}"'",
+                    "inline": true
+                  }
+                ],
+                "footer": {
+                  "text": "GitHub Actions CI/CD"
+                }
+              }]
+            }' $DISCORD_WEBHOOK_URL
+          }
+
+          # Run AWS SSM Command
           COMMAND_ID=$(aws ssm send-command \
-            --region $AWS_REGION \
-            --document-name $SSM_DOCUMENT_NAME \
+            --document-name "AWS-RunShellScript" \
             --targets "Key=instanceids,Values=$INSTANCE_ID" \
-            --parameters 'commands=["echo $(date)"]' \
-            --query 'Command.CommandId' \
+            --parameters "commands=[
+              \"docker pull abdulrhmanashraf98/marom-medical:$IMAGE_TAG\",
+              \"docker ps -q -f name='$CONTAINER_NAME' | xargs -r docker stop\",
+              \"docker ps -a -q -f name='$CONTAINER_NAME' | xargs -r docker rm\",
+              \"docker images -q | grep 'abdulrhmanashraf98/marom-medical' | xargs -r docker rmi -f\",
+              \"docker images -f 'dangling=true' -q | xargs -r docker rmi -f\",
+              \"docker system prune -af\",
+              \"docker run -d --name '$CONTAINER_NAME' -p 8080:80 abdulrhmanashraf98/marom-medical:$IMAGE_TAG\"
+            ]" \
+            --timeout-seconds 1200 \
+            --region eu-north-1 \
+            --query "Command.CommandId" \
             --output text)
 
-          echo "Waiting for SSM command completion..."
-          STATUS=$(aws ssm list-commands --command-id $COMMAND_ID --query 'Commands[0].Status' --output text)
-          while [ "$STATUS" != "Success" ] && [ "$STATUS" != "Failed" ]; do
-            sleep 30
-            STATUS=$(aws ssm list-commands --command-id $COMMAND_ID --query 'Commands[0].Status' --output text)
-            echo "Current status: $STATUS"
+          echo "SSM Command ID: $COMMAND_ID"
+
+          # Wait for the command to finish
+          echo "Waiting for command to complete..."
+          sleep 60  # Adjust the sleep time as needed
+
+          # Poll for command status
+          POLL_INTERVAL=30
+          MAX_ATTEMPTS=10
+          ATTEMPT=1
+          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+            COMMAND_STATUS=$(aws ssm list-commands \
+              --command-id "$COMMAND_ID" \
+              --query "Commands[0].Status" \
+              --output text \
+              --region eu-north-1)
+
+            echo "Attempt $ATTEMPT: Command Status: $COMMAND_STATUS"
+
+            if [ "$COMMAND_STATUS" = "Success" ]; then
+              send_discord_notification "🚀 Deployment Completed" "Deployment to EC2 instance completed successfully for commit ${IMAGE_TAG}." 65280
+              break
+            elif [ "$COMMAND_STATUS" = "Failed" ]; then
+              send_discord_notification "❌ Deployment Failed" "Deployment to EC2 instance failed for commit ${IMAGE_TAG}. Please check the logs for more details." 16711680
+              SUCCESS=false
+              break
+            fi
+
+            sleep $POLL_INTERVAL
+            ATTEMPT=$((ATTEMPT + 1))
           done
 
-          if [ "$STATUS" == "Success" ]; then
-            echo "Deployment completed successfully."
+          if [ "$SUCCESS" = true ]; then
+            echo "Deployment successful."
           else
             echo "Deployment failed."
             exit 1
           fi
-
-      - name: Notify Deployment Status
-        if: success()
-        run: echo "Deployment was successful!"
-
-      - name: Notify Deployment Failure
-        if: failure()
-        run: echo "Deployment failed. Check logs for details."
