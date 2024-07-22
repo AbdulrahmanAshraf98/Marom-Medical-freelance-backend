@@ -13,6 +13,34 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/docker
+            ~/.docker
+          key: ${{ runner.os }}-docker-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-docker-
+
+      - name: Cache Node.js modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.npm
+            !~/.npm/**/.cache
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '14' # Adjust according to your needs
+
+      - name: Install dependencies
+        run: npm install
+
       - name: Set up AWS CLI
         uses: aws-actions/configure-aws-credentials@v3
         with:
@@ -49,16 +77,56 @@ jobs:
             DB_TYPE=${{ secrets.DB_TYPE }}
             DB_DATABASE_SYNCHRONIZE=${{ secrets.DB_DATABASE_SYNCHRONIZE }}
 
-      - name: Notify Discord of build start
+      - name: Notify Discord of Docker build start
         run: |
           curl -H "Content-Type: application/json" -X POST -d '{
             "embeds": [{
-              "title": "🔨 Build Started",
-              "description": "Build process started for commit `${{ github.sha }}`.",
+              "title": "🔨 Docker Build Started",
+              "description": "Docker build process started for commit `${{ github.sha }}`.",
               "color": 16776960,
               "thumbnail": {
                 "url": "https://example.com/start-image.png"
               },
+              "fields": [
+                {
+                  "name": "Commit SHA",
+                  "value": "${{ github.sha }}",
+                  "inline": true
+                }
+              ],
+              "footer": {
+                "text": "GitHub Actions CI/CD"
+              }
+            }]
+          }' ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+      - name: Notify Discord of Docker build completion
+        run: |
+          curl -H "Content-Type: application/json" -X POST -d '{
+            "embeds": [{
+              "title": "✅ Docker Build Completed",
+              "description": "Docker build process completed successfully for commit `${{ github.sha }}`.",
+              "color": 65280,
+              "fields": [
+                {
+                  "name": "Commit SHA",
+                  "value": "${{ github.sha }}",
+                  "inline": true
+                }
+              ],
+              "footer": {
+                "text": "GitHub Actions CI/CD"
+              }
+            }]
+          }' ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+      - name: Notify Discord of deployment start
+        run: |
+          curl -H "Content-Type: application/json" -X POST -d '{
+            "embeds": [{
+              "title": "🚀 Deployment Started",
+              "description": "Deployment process to EC2 started for commit `${{ github.sha }}`.",
+              "color": 16776960,
               "fields": [
                 {
                   "name": "Commit SHA",
@@ -103,9 +171,6 @@ jobs:
               }]
             }' $DISCORD_WEBHOOK_URL
           }
-
-          # Send build start notification
-          send_discord_notification "🔨 Build Started" "Build process started for commit ${IMAGE_TAG}." 16776960
 
           # Run AWS SSM Command
           COMMAND_ID=$(aws ssm send-command \
