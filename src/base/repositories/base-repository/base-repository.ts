@@ -16,7 +16,7 @@ import { Injectable } from '@nestjs/common';
 export class BaseRepository<T extends BaseEntity> extends Repository<T> {
   private readonly DEFAULT_PAGE = 0;
   private readonly DEFAULT_LIMIT = 20;
-  private readonly DEFAULT_SORT_BY = 'createdAt';
+  private readonly DEFAULT_SORT_BY = 'id';
   private readonly DEFAULT_ORDER: 'ASC' | 'DESC' = 'DESC';
   async findAllWithPagination(
     conditions: FindManyOptions<T>['where'] = {},
@@ -51,16 +51,23 @@ export class BaseRepository<T extends BaseEntity> extends Repository<T> {
 
   async findOneBy(
     conditions: FindOneOptions<T>['where'],
-  ): Promise<T | undefined> {
+  ): Promise<T | null> {
     return this.findOne({ where: conditions } as FindOneOptions<T>);
   }
-
   async updateBy(
     conditions: FindOptionsWhere<T> | FindOptionsWhere<T>[],
     updateDto: Partial<T>,
-  ): Promise<UpdateResult> {
-    // Cast `updateDto` to match `_QueryDeepPartialEntity<T>`
-    return this.update(conditions as any, updateDto as any);
+  ): Promise<{ updatedEntities: T[]; updateResult: UpdateResult }> {
+    // Perform the update operation
+    const updateResult: UpdateResult = await this.update(
+      conditions as any,
+      updateDto as any,
+    );
+    const findOptions: FindManyOptions<T> = {
+      where: conditions,
+    };
+    const updatedEntities:(T)[] = await this.find(findOptions);
+    return { updatedEntities, updateResult };
   }
 
   async deleteBy(
