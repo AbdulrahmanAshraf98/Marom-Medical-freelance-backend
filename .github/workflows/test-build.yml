@@ -47,14 +47,15 @@ jobs:
 
       - name: Run tests
         id: test
-        run: npm test
+        run: |
+          npm test | tee test.log
         continue-on-error: true
 
       - name: Notify Discord of test result
         if: always()
         run: |
+          TEST_LOG=$(tail -n 10 test.log)
           if [ "${{ steps.test.outcome }}" == 'failure' ]; then
-            TEST_LOG=$(tail -n 10 /path/to/test/log)  # Update with the actual path to your test log
             curl -H "Content-Type: application/json" -X POST -d '{
               "embeds": [{
                 "title": "❌ Test Failure",
@@ -157,6 +158,7 @@ jobs:
       - name: Notify Discord of build result
         if: always()
         run: |
+          BUILD_LOG=$(tail -n 10 build.log)
           if [ "${{ steps.build.outcome }}" == 'success' ]; then
             curl -H "Content-Type: application/json" -X POST -d '{
               "embeds": [{
@@ -179,7 +181,6 @@ jobs:
               }]
             }' ${{ secrets.DISCORD_WEBHOOK_URL }}
           else
-            BUILD_LOG=$(tail -n 10 /path/to/build/log)  # Update with the actual path to your build log
             curl -H "Content-Type: application/json" -X POST -d '{
               "embeds": [{
                 "title": "❌ Build Failure",
