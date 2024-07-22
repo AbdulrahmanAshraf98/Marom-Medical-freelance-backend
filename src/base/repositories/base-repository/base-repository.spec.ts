@@ -9,12 +9,13 @@ import {
   UpdateResult,
 } from 'typeorm';
 import { testDataSource } from '../../../config/orm-testing-config/ormconfig.test';
+import { TestEntity } from '../../../../test/__mocks__/test-entity/test-entity';
 
 describe('BaseRepository Integration Test', () => {
-  let baseRepository: BaseRepository<BaseEntity>;
-  let repository: Repository<BaseEntity>;
+  let baseRepository: BaseRepository<TestEntity>;
+  let repository: Repository<TestEntity>;
   let dataSource: DataSource;
-  let mockItems: BaseEntity[];
+  let mockItems: TestEntity[];
   const totalCount: number = 100;
   beforeAll(async () => {
     dataSource = testDataSource;
@@ -24,15 +25,15 @@ describe('BaseRepository Integration Test', () => {
     await dataSource.destroy();
   });
   beforeEach(async () => {
-    repository = testDataSource.getRepository(BaseEntity);
-    baseRepository = new BaseRepository<BaseEntity>(
-      BaseEntity as any,
+    repository = testDataSource.getRepository(TestEntity);
+    baseRepository = new BaseRepository<TestEntity>(
+      TestEntity as any,
       repository.manager,
     );
 
     await repository.clear();
     mockItems = Array.from({ length: 100 }, (_, index) => {
-      const item = new BaseEntity();
+      const item = new TestEntity();
       item.id = index + 1;
       return item;
     });
@@ -40,12 +41,12 @@ describe('BaseRepository Integration Test', () => {
     await repository.save(mockItems);
   });
   it('should find all items with pagination', async () => {
-    const result: { items: BaseEntity[]; totalCount: number } =
+    const result: { items: TestEntity[]; totalCount: number } =
       await baseRepository.findAllWithPagination({}, [], 0, 10, 'id', 'ASC');
     expect(result).toEqual({ items: mockItems.slice(0, 10), totalCount });
   });
   it('should find all items with pagination and desc order ', async () => {
-    const result: { items: BaseEntity[]; totalCount: number } =
+    const result: { items: TestEntity[]; totalCount: number } =
       await baseRepository.findAllWithPagination({}, [], 0, 10, 'id', 'DESC');
     expect(result).toEqual({
       items: mockItems.reverse().slice(0, 10),
@@ -55,7 +56,7 @@ describe('BaseRepository Integration Test', () => {
 
   it('should find items with condition where ids less than 10  ', async () => {
     // Define the condition to find items with IDs less than 10
-    const result: { items: BaseEntity[]; totalCount: number } =
+    const result: { items: TestEntity[]; totalCount: number } =
       await baseRepository.findAllWithPagination(
         { id: LessThan(10) },
         [],
@@ -67,18 +68,18 @@ describe('BaseRepository Integration Test', () => {
     expect(result).toEqual({ items: mockItems.slice(0, 5), totalCount: 9 });
   });
   it('should return all without pagination ', async () => {
-    const result: BaseEntity[] =
+    const result: TestEntity[] =
       await baseRepository.findAllWithoutPagination();
     expect(result).toEqual(mockItems.reverse());
   });
   it('should return one item by condition ', async () => {
-    const item: BaseEntity = await baseRepository.findOneBy({ id: 1 });
+    const item: TestEntity = await baseRepository.findOneBy({ id: 1 });
     expect(item).toEqual(
-      mockItems.filter((item: BaseEntity) => item.id == 1)[0],
+      mockItems.filter((item: TestEntity) => item.id == 1)[0],
     );
   });
   it('should return null for  item not found ', async () => {
-    const item: BaseEntity | null = await baseRepository.findOneBy({ id: 110 });
+    const item: TestEntity | null = await baseRepository.findOneBy({ id: 110 });
     expect(item).toBeNull();
   });
   it('should update active to false for  item with id equal one  ', async (): Promise<void> => {
