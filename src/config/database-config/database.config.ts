@@ -11,6 +11,6 @@ export const getDatabaseConfig = async (
   username: configService.get<string>('DB_USERNAME', 'root'),
   password: configService.get<string>('DB_PASSWORD', 'root'),
   database: configService.get<string>('DB_DATABASE', 'test'),
-  entities: [BaseEntity],
-  synchronize: true,
+  autoLoadEntities: true,
+  synchronize: configService.get<boolean>('DB_DATABASE_SYNCHRONIZE', false),
 });
