@@ -1,15 +1,17 @@
 import { Module } from '@nestjs/common';
-import { BaseService } from '../services/base-service/base-service.service';
 import { BaseRepository } from '../repositories/base-repository/base-repository';
+import { BaseService } from '../services/base/base.service';
 
 @Module({
   providers: [
-    BaseService,
+
     {
       provide: 'BaseRepository',
       useClass: BaseRepository,
     },
+
+    BaseService
   ],
-  exports: [BaseService, 'BaseRepository'],
+  exports: [ 'BaseRepository',BaseService ],
 })
 export class BaseModuleModule {}

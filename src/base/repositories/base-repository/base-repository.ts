@@ -14,10 +14,10 @@ import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class BaseRepository<T extends BaseEntity> extends Repository<T> {
-  private readonly DEFAULT_PAGE = 0;
-  private readonly DEFAULT_LIMIT = 20;
-  private readonly DEFAULT_SORT_BY = 'id';
-  private readonly DEFAULT_ORDER: 'ASC' | 'DESC' = 'DESC';
+  public readonly DEFAULT_PAGE = 0;
+  public readonly DEFAULT_LIMIT = 20;
+  public readonly DEFAULT_SORT_BY = 'id';
+  public readonly DEFAULT_ORDER: 'ASC' | 'DESC' = 'DESC';
   async findAllWithPagination(
     conditions: FindManyOptions<T>['where'] = {},
     relations: string[] = [],

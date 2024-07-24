@@ -9,6 +9,7 @@ import { getDatabaseConfig } from './config/database-config/database.config';
 import { join } from 'path';
 import { TranslationService } from './common/service/translation/translation.service';
 import { BaseModuleModule } from './base/base-module/base-module.module';
+import { BaseService } from './base/services/base/base.service';
 
 
 @Module({
@@ -38,7 +39,6 @@ import { BaseModuleModule } from './base/base-module/base-module.module';
       imports: [ConfigModule], // Import ConfigModule to use ConfigService
     }),
     BaseModuleModule
-
   ],
   controllers: [AppController],
   providers: [

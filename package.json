@@ -81,6 +81,8 @@
       "**/*.(t|j)s"
     ],
     "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "transformIgnorePatterns": ["/node_modules/(?!your-module-to-transform)"]
+
   }
 }
