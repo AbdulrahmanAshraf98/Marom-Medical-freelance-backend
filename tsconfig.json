@@ -21,7 +21,8 @@
   "include": [
     "src/**/*",
     "i18n/**/*",
-    "test/**/*.ts"
+    "test/**/*.ts",
+    "public/**/*"
   ],
   "exclude": [
     "node_modules",
